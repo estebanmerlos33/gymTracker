@@ -140,6 +140,45 @@ async function reemplazarTodo(entrenamientos) {
 
 const SENSACION_LABEL = { facil: "Fácil", normal: "Normal", dificil: "Difícil", extremo: "Extremo" };
 
+const EJERCICIOS_COMUNES = [
+  // Pecho
+  "Press banca", "Press banca inclinado", "Press banca declinado",
+  "Press con mancuernas", "Press inclinado con mancuernas",
+  "Aperturas con mancuernas", "Aperturas en polea (cruce de poleas)",
+  "Press en máquina", "Pec deck (contractora)",
+  // Espalda
+  "Dominadas", "Dominadas supinas (chin-up)", "Jalón al pecho",
+  "Remo con barra", "Remo con mancuerna", "Remo en polea baja",
+  "Remo en máquina", "Peso muerto", "Peso muerto rumano",
+  "Pull-over", "Hiperextensiones",
+  // Piernas
+  "Sentadilla", "Sentadilla frontal", "Sentadilla búlgara",
+  "Sentadilla hack", "Prensa de piernas", "Zancadas",
+  "Peso muerto a una pierna", "Extensión de cuádriceps",
+  "Curl femoral (isquios)", "Elevación de talones (gemelos)",
+  "Hip thrust", "Puente de glúteos", "Abducción de cadera",
+  // Hombros
+  "Press militar", "Press militar con mancuernas", "Press Arnold",
+  "Elevaciones laterales", "Elevaciones frontales",
+  "Pájaros (deltoide posterior)", "Face pull", "Encogimientos (trapecio)",
+  // Brazos
+  "Curl de bíceps con barra", "Curl de bíceps con mancuernas",
+  "Curl martillo", "Curl predicador", "Press francés",
+  "Extensión de tríceps en polea", "Fondos en banco (tríceps)",
+  "Fondos en paralelas",
+  // Core
+  "Plancha (plank)", "Abdominales crunch", "Elevación de piernas colgado",
+  "Rueda abdominal (ab wheel)", "Russian twist", "Plancha lateral",
+  // Calistenia
+  "Flexiones de brazos (push-up)", "Flexiones diamante",
+  "Flexiones con palmada", "Fondos en anillas", "Muscle-up",
+  "Sentadilla pistol", "Sentadilla a una pierna asistida",
+  "Handstand (parada de manos)", "Handstand push-up",
+  "Front lever", "Back lever", "Planche", "L-sit",
+  "Dominadas australianas (remo invertido)", "Burpees",
+  "Mountain climbers", "Saltos al cajón (box jump)"
+];
+
 function hoyISO() {
   const d = new Date();
   const tzOffset = d.getTimezoneOffset() * 60000;
@@ -290,10 +329,11 @@ async function renderDetalle() {
   detalleFecha.textContent = formatearFechaISO(entrenamientoActual.fecha);
   listaEjercicios.innerHTML = entrenamientoActual.ejercicios.map(templateEjercicio).join("");
 
-  // Autocompletar con nombres de ejercicios usados antes
+  // Autocompletar: nombres que el usuario ya usó + lista de ejercicios comunes
   const todos = await obtenerEntrenamientos();
   const nombres = new Set();
   todos.forEach((e) => e.ejercicios.forEach((ej) => nombres.add(ej.nombre)));
+  EJERCICIOS_COMUNES.forEach((n) => nombres.add(n));
   datalistSugeridos.innerHTML = [...nombres].map((n) => `<option value="${n}">`).join("");
 }
 
