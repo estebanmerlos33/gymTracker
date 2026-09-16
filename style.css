@@ -248,12 +248,13 @@ button:active { transform: scale(0.98); }
   min-width: 0;
   text-align: left;
   cursor: pointer;
+  color: var(--text);
 }
 
 .btn-toggle-ejercicio:active { transform: none; }
 
 .toggle-icono {
-  color: var(--text);
+  color: var(--text-dim);
   font-size: 0.75rem;
   width: 12px;
   flex: none;
