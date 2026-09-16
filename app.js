@@ -195,6 +195,7 @@ function formatearFechaISO(iso) {
 // ============================================================
 
 let entrenamientoActual = null; // objeto completo mientras se edita el detalle
+let colapsados = new Set(); // ids de ejercicios colapsados en la vista actual
 
 const viewLista = document.getElementById("view-lista");
 const viewDetalle = document.getElementById("view-detalle");
@@ -208,6 +209,7 @@ function irALista() {
 
 async function irADetalle(id) {
   entrenamientoActual = await obtenerEntrenamiento(id);
+  colapsados = new Set();
   viewLista.classList.add("hidden");
   viewDetalle.classList.remove("hidden");
   renderDetalle();
@@ -296,38 +298,51 @@ function templateSerie(ejercicioId, serie) {
 }
 
 function templateEjercicio(ej) {
+  const colapsado = colapsados.has(ej.id);
+  const totalSeries = ej.series.length;
+
   return `
     <section class="card ejercicio-card" data-ejercicio-id="${ej.id}">
       <div class="ejercicio-head">
-        <h3>${ej.nombre}</h3>
+        <button type="button" class="btn-toggle-ejercicio" data-ejercicio-id="${ej.id}" aria-expanded="${!colapsado}">
+          <span class="toggle-icono">${colapsado ? "▸" : "▾"}</span>
+          <h3>${ej.nombre}</h3>
+          ${colapsado ? `<span class="ejercicio-resumen">${totalSeries} serie${totalSeries !== 1 ? "s" : ""}</span>` : ""}
+        </button>
         <button class="ghost danger btn-borrar-ejercicio" data-ejercicio-id="${ej.id}">Borrar ejercicio</button>
       </div>
 
-      <ul class="lista-series">
-        ${ej.series.map((s) => templateSerie(ej.id, s)).join("") || `<li class="serie-vacia">Sin series todavía.</li>`}
-      </ul>
+      <div class="ejercicio-contenido ${colapsado ? "hidden" : ""}">
+        <ul class="lista-series">
+          ${ej.series.map((s) => templateSerie(ej.id, s)).join("") || `<li class="serie-vacia">Sin series todavía.</li>`}
+        </ul>
 
-      <form class="form-serie" data-ejercicio-id="${ej.id}">
-        <div class="row">
-          <input type="number" class="input-peso" placeholder="kg" step="0.5" min="0" required>
-          <input type="number" class="input-reps" placeholder="reps" min="1" required>
-        </div>
-        <select class="input-sensacion">
-          <option value="">Sensación (opcional)</option>
-          <option value="facil">Fácil</option>
-          <option value="normal">Normal</option>
-          <option value="dificil">Difícil</option>
-          <option value="extremo">Extremo</option>
-        </select>
-        <button type="submit">+ Agregar serie</button>
-      </form>
+        <form class="form-serie" data-ejercicio-id="${ej.id}">
+          <div class="row">
+            <input type="number" class="input-peso" placeholder="kg" step="0.5" min="0" required>
+            <input type="number" class="input-reps" placeholder="reps" min="1" required>
+          </div>
+          <select class="input-sensacion">
+            <option value="">Sensación (opcional)</option>
+            <option value="facil">Fácil</option>
+            <option value="normal">Normal</option>
+            <option value="dificil">Difícil</option>
+            <option value="extremo">Extremo</option>
+          </select>
+          <button type="submit">+ Agregar serie</button>
+        </form>
+      </div>
     </section>
   `;
 }
 
+function renderEjercicios() {
+  listaEjercicios.innerHTML = entrenamientoActual.ejercicios.map(templateEjercicio).join("");
+}
+
 async function renderDetalle() {
   detalleFecha.textContent = formatearFechaISO(entrenamientoActual.fecha);
-  listaEjercicios.innerHTML = entrenamientoActual.ejercicios.map(templateEjercicio).join("");
+  renderEjercicios();
 
   // Autocompletar: nombres que el usuario ya usó + lista de ejercicios comunes
   const todos = await obtenerEntrenamientos();
@@ -377,6 +392,15 @@ listaEjercicios.addEventListener("submit", async (e) => {
 });
 
 listaEjercicios.addEventListener("click", async (e) => {
+  const btnToggle = e.target.closest(".btn-toggle-ejercicio");
+  if (btnToggle) {
+    const id = btnToggle.dataset.ejercicioId;
+    if (colapsados.has(id)) colapsados.delete(id);
+    else colapsados.add(id);
+    renderEjercicios();
+    return;
+  }
+
   if (e.target.matches(".btn-borrar-ejercicio")) {
     const ejercicioId = e.target.dataset.ejercicioId;
     if (!confirm("¿Borrar este ejercicio y todas sus series?")) return;
