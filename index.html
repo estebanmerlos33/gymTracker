@@ -21,41 +21,58 @@
 
 <main class="wrap">
 
-  <section class="card">
-    <h2>Nueva serie</h2>
-    <form id="form-serie">
-      <label>
-        Ejercicio
-        <input type="text" id="ejercicio" placeholder="Press banca" required list="ejercicios-sugeridos">
-        <datalist id="ejercicios-sugeridos"></datalist>
-      </label>
-      <div class="row">
-        <label>
-          Peso (kg)
-          <input type="number" id="peso" step="0.5" min="0" required>
-        </label>
-        <label>
-          Repeticiones
-          <input type="number" id="reps" min="1" required>
-        </label>
+  <!-- ---------- Vista: lista de entrenamientos ---------- -->
+  <section id="view-lista" class="view">
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Entrenamientos</h2>
+        <div class="actions">
+          <button id="btn-export" class="ghost">Exportar</button>
+          <label class="ghost file-label">
+            Importar
+            <input type="file" id="input-import" accept="application/json" hidden>
+          </label>
+        </div>
       </div>
-      <button type="submit">Guardar serie</button>
-    </form>
+
+      <div id="form-nuevo-wrap" class="form-nuevo hidden">
+        <label>
+          Fecha del entrenamiento
+          <input type="date" id="fecha-nuevo">
+        </label>
+        <div class="form-actions">
+          <button id="btn-crear-entrenamiento">Crear entrenamiento</button>
+          <button id="btn-cancelar-nuevo" class="ghost" type="button">Cancelar</button>
+        </div>
+      </div>
+
+      <button id="btn-nuevo" class="btn-nuevo">+ Nuevo entrenamiento</button>
+    </section>
+
+    <ul id="lista-entrenamientos" class="lista-entrenamientos"></ul>
+    <p id="vacio" class="vacio">Todavía no registraste ningún entrenamiento.</p>
   </section>
 
-  <section class="card">
-    <div class="card-head">
-      <h2>Historial</h2>
-      <div class="actions">
-        <button id="btn-export" class="ghost">Exportar</button>
-        <label class="ghost file-label">
-          Importar
-          <input type="file" id="input-import" accept="application/json" hidden>
-        </label>
-      </div>
-    </div>
-    <ul id="lista-series" class="lista"></ul>
-    <p id="vacio" class="vacio">Todavía no registraste ninguna serie.</p>
+  <!-- ---------- Vista: detalle de un entrenamiento ---------- -->
+  <section id="view-detalle" class="view hidden">
+    <button id="btn-volver" class="ghost btn-volver">‹ Volver</button>
+
+    <section class="card detalle-header">
+      <h2 id="detalle-fecha"></h2>
+      <button id="btn-borrar-entrenamiento" class="ghost danger">Borrar entrenamiento</button>
+    </section>
+
+    <div id="lista-ejercicios"></div>
+
+    <section class="card">
+      <h2>Agregar ejercicio</h2>
+      <form id="form-ejercicio">
+        <input type="text" id="nombre-ejercicio" placeholder="Ej: Press banca" required list="ejercicios-sugeridos" autocomplete="off">
+        <datalist id="ejercicios-sugeridos"></datalist>
+        <button type="submit">Agregar ejercicio</button>
+      </form>
+    </section>
   </section>
 
 </main>

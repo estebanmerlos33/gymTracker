@@ -1,47 +1,115 @@
-// ---------- Capa de persistencia: IndexedDB ----------
+// ============================================================
+// Capa de persistencia: IndexedDB
+// Estructura: Entrenamiento -> Ejercicio -> Serie -> {peso, reps, sensacion}
+// ============================================================
 
 const DB_NAME = "entrenamiento-db";
-const STORE = "series";
+const STORE = "entrenamientos";
+const DB_VERSION = 2; // v2: pasa de series sueltas a entrenamientos con jerarquía
 let dbPromise;
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
 
 function abrirDB() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+
+    req.onupgradeneeded = (event) => {
       const db = req.result;
+      const tx = req.transaction;
+
       if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
-        store.createIndex("por_fecha", "fecha");
+        db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+      }
+
+      // Migración desde la versión anterior (store "series", plana, sin jerarquía)
+      if (db.objectStoreNames.contains("series")) {
+        const oldStore = tx.objectStore("series");
+        const newStore = tx.objectStore(STORE);
+
+        oldStore.getAll().onsuccess = (e) => {
+          const viejas = e.target.result || [];
+          // Agrupa series viejas por día y por nombre de ejercicio
+          const porFecha = {};
+          for (const s of viejas) {
+            const d = new Date(s.fecha);
+            const tzOffset = d.getTimezoneOffset() * 60000;
+            const fechaISO = new Date(d - tzOffset).toISOString().slice(0, 10);
+
+            if (!porFecha[fechaISO]) porFecha[fechaISO] = {};
+            if (!porFecha[fechaISO][s.ejercicio]) porFecha[fechaISO][s.ejercicio] = [];
+            porFecha[fechaISO][s.ejercicio].push({
+              id: uid(),
+              peso: s.peso,
+              reps: s.reps,
+              sensacion: "" // el modelo viejo no tenía este campo
+            });
+          }
+
+          for (const [fechaISO, ejerciciosMap] of Object.entries(porFecha)) {
+            const ejercicios = Object.entries(ejerciciosMap).map(([nombre, series]) => ({
+              id: uid(),
+              nombre,
+              series
+            }));
+            newStore.add({ fecha: fechaISO, ejercicios });
+          }
+
+          db.deleteObjectStore("series");
+        };
       }
     };
+
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
 }
 
-async function guardarSerie(serie) {
+async function crearEntrenamiento(fechaISO) {
   const db = await abrirDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).add(serie);
+    const req = tx.objectStore(STORE).add({ fecha: fechaISO, ejercicios: [] });
+    req.onsuccess = () => resolve(req.result); // devuelve el id nuevo
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function obtenerEntrenamientos() {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => resolve(req.result.sort((a, b) => b.fecha.localeCompare(a.fecha)));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function obtenerEntrenamiento(id) {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const req = tx.objectStore(STORE).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function guardarEntrenamiento(entrenamiento) {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put(entrenamiento);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-async function obtenerSeries() {
-  const db = await abrirDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result.sort((a, b) => b.fecha - a.fecha));
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function borrarSerie(id) {
+async function borrarEntrenamiento(id) {
   const db = await abrirDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
@@ -51,14 +119,14 @@ async function borrarSerie(id) {
   });
 }
 
-async function reemplazarTodo(series) {
+async function reemplazarTodo(entrenamientos) {
   const db = await abrirDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
     store.clear();
-    for (const s of series) {
-      const { id, ...resto } = s; // el id lo regenera autoIncrement
+    for (const e of entrenamientos) {
+      const { id, ...resto } = e; // el id lo regenera autoIncrement
       store.add(resto);
     }
     tx.oncomplete = () => resolve();
@@ -66,76 +134,235 @@ async function reemplazarTodo(series) {
   });
 }
 
-// ---------- UI ----------
+// ============================================================
+// Utilidades
+// ============================================================
 
-const form = document.getElementById("form-serie");
-const lista = document.getElementById("lista-series");
+const SENSACION_LABEL = { facil: "Fácil", normal: "Normal", dificil: "Difícil", extremo: "Extremo" };
+
+function hoyISO() {
+  const d = new Date();
+  const tzOffset = d.getTimezoneOffset() * 60000;
+  return new Date(d - tzOffset).toISOString().slice(0, 10);
+}
+
+function formatearFechaISO(iso) {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+// ============================================================
+// Estado y navegación entre vistas
+// ============================================================
+
+let entrenamientoActual = null; // objeto completo mientras se edita el detalle
+
+const viewLista = document.getElementById("view-lista");
+const viewDetalle = document.getElementById("view-detalle");
+
+function irALista() {
+  entrenamientoActual = null;
+  viewDetalle.classList.add("hidden");
+  viewLista.classList.remove("hidden");
+  renderLista();
+}
+
+async function irADetalle(id) {
+  entrenamientoActual = await obtenerEntrenamiento(id);
+  viewLista.classList.add("hidden");
+  viewDetalle.classList.remove("hidden");
+  renderDetalle();
+}
+
+// ============================================================
+// Vista: lista de entrenamientos
+// ============================================================
+
+const listaEntrenamientos = document.getElementById("lista-entrenamientos");
 const vacio = document.getElementById("vacio");
-const datalist = document.getElementById("ejercicios-sugeridos");
+const btnNuevo = document.getElementById("btn-nuevo");
+const formNuevoWrap = document.getElementById("form-nuevo-wrap");
+const fechaNuevo = document.getElementById("fecha-nuevo");
 
-function formatearFecha(ts) {
-  return new Date(ts).toLocaleDateString("es-AR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-}
+async function renderLista() {
+  const entrenamientos = await obtenerEntrenamientos();
+  vacio.style.display = entrenamientos.length ? "none" : "block";
 
-function render(series) {
-  lista.innerHTML = "";
-  vacio.style.display = series.length ? "none" : "block";
-
-  const nombres = new Set();
-
-  for (const s of series) {
-    nombres.add(s.ejercicio);
-
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <div>
-        <div class="serie-nombre">${s.ejercicio}</div>
-        <div class="serie-detalle">${s.peso} kg × ${s.reps} reps</div>
-      </div>
-      <div style="text-align:right">
-        <div class="serie-fecha">${formatearFecha(s.fecha)}</div>
-        <button class="btn-borrar" data-id="${s.id}">borrar</button>
-      </div>
+  listaEntrenamientos.innerHTML = entrenamientos.map((e) => {
+    const totalSeries = e.ejercicios.reduce((acc, ej) => acc + ej.series.length, 0);
+    return `
+      <li data-id="${e.id}">
+        <div>
+          <div class="entrenamiento-fecha">${formatearFechaISO(e.fecha)}</div>
+          <div class="entrenamiento-resumen">
+            ${e.ejercicios.length} ejercicio${e.ejercicios.length !== 1 ? "s" : ""}
+            · ${totalSeries} serie${totalSeries !== 1 ? "s" : ""}
+          </div>
+        </div>
+        <button class="ghost btn-abrir" data-id="${e.id}">Ver</button>
+      </li>
     `;
-    lista.appendChild(li);
+  }).join("");
+}
+
+btnNuevo.addEventListener("click", () => {
+  fechaNuevo.value = hoyISO();
+  formNuevoWrap.classList.remove("hidden");
+  btnNuevo.classList.add("hidden");
+});
+
+document.getElementById("btn-cancelar-nuevo").addEventListener("click", () => {
+  formNuevoWrap.classList.add("hidden");
+  btnNuevo.classList.remove("hidden");
+});
+
+document.getElementById("btn-crear-entrenamiento").addEventListener("click", async () => {
+  if (!fechaNuevo.value) {
+    alert("Elegí una fecha para el entrenamiento.");
+    return;
   }
+  const id = await crearEntrenamiento(fechaNuevo.value);
+  formNuevoWrap.classList.add("hidden");
+  btnNuevo.classList.remove("hidden");
+  await irADetalle(id);
+});
 
-  datalist.innerHTML = [...nombres].map(n => `<option value="${n}">`).join("");
+listaEntrenamientos.addEventListener("click", (e) => {
+  if (e.target.matches(".btn-abrir")) {
+    irADetalle(Number(e.target.dataset.id));
+  }
+});
+
+document.getElementById("btn-volver").addEventListener("click", irALista);
+
+// ============================================================
+// Vista: detalle de un entrenamiento
+// ============================================================
+
+const detalleFecha = document.getElementById("detalle-fecha");
+const listaEjercicios = document.getElementById("lista-ejercicios");
+const datalistSugeridos = document.getElementById("ejercicios-sugeridos");
+
+function templateSerie(ejercicioId, serie) {
+  const pill = serie.sensacion
+    ? `<span class="sensacion-pill sensacion-${serie.sensacion}">${SENSACION_LABEL[serie.sensacion]}</span>`
+    : "";
+  return `
+    <li>
+      <span class="serie-detalle">${serie.peso} kg × ${serie.reps} reps</span>
+      ${pill}
+      <button class="btn-borrar-serie" data-ejercicio-id="${ejercicioId}" data-serie-id="${serie.id}" title="Borrar serie">×</button>
+    </li>
+  `;
 }
 
-async function recargar() {
-  const series = await obtenerSeries();
-  render(series);
+function templateEjercicio(ej) {
+  return `
+    <section class="card ejercicio-card" data-ejercicio-id="${ej.id}">
+      <div class="ejercicio-head">
+        <h3>${ej.nombre}</h3>
+        <button class="ghost danger btn-borrar-ejercicio" data-ejercicio-id="${ej.id}">Borrar ejercicio</button>
+      </div>
+
+      <ul class="lista-series">
+        ${ej.series.map((s) => templateSerie(ej.id, s)).join("") || `<li class="serie-vacia">Sin series todavía.</li>`}
+      </ul>
+
+      <form class="form-serie" data-ejercicio-id="${ej.id}">
+        <div class="row">
+          <input type="number" class="input-peso" placeholder="kg" step="0.5" min="0" required>
+          <input type="number" class="input-reps" placeholder="reps" min="1" required>
+        </div>
+        <select class="input-sensacion">
+          <option value="">Sensación (opcional)</option>
+          <option value="facil">Fácil</option>
+          <option value="normal">Normal</option>
+          <option value="dificil">Difícil</option>
+          <option value="extremo">Extremo</option>
+        </select>
+        <button type="submit">+ Agregar serie</button>
+      </form>
+    </section>
+  `;
 }
 
-form.addEventListener("submit", async (e) => {
+async function renderDetalle() {
+  detalleFecha.textContent = formatearFechaISO(entrenamientoActual.fecha);
+  listaEjercicios.innerHTML = entrenamientoActual.ejercicios.map(templateEjercicio).join("");
+
+  // Autocompletar con nombres de ejercicios usados antes
+  const todos = await obtenerEntrenamientos();
+  const nombres = new Set();
+  todos.forEach((e) => e.ejercicios.forEach((ej) => nombres.add(ej.nombre)));
+  datalistSugeridos.innerHTML = [...nombres].map((n) => `<option value="${n}">`).join("");
+}
+
+async function persistirYRenderizar() {
+  await guardarEntrenamiento(entrenamientoActual);
+  await renderDetalle();
+}
+
+document.getElementById("form-ejercicio").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const ejercicio = document.getElementById("ejercicio").value.trim();
-  const peso = parseFloat(document.getElementById("peso").value);
-  const reps = parseInt(document.getElementById("reps").value, 10);
+  const input = document.getElementById("nombre-ejercicio");
+  const nombre = input.value.trim();
+  if (!nombre) return;
 
-  await guardarSerie({ ejercicio, peso, reps, fecha: Date.now() });
-  form.reset();
-  document.getElementById("ejercicio").focus();
-  await recargar();
+  entrenamientoActual.ejercicios.push({ id: uid(), nombre, series: [] });
+  input.value = "";
+  await persistirYRenderizar();
 });
 
-lista.addEventListener("click", async (e) => {
-  if (e.target.matches(".btn-borrar")) {
-    await borrarSerie(Number(e.target.dataset.id));
-    await recargar();
+document.getElementById("btn-borrar-entrenamiento").addEventListener("click", async () => {
+  if (!confirm("¿Borrar este entrenamiento completo? No se puede deshacer.")) return;
+  await borrarEntrenamiento(entrenamientoActual.id);
+  irALista();
+});
+
+// Delegación de eventos dentro de la lista de ejercicios
+listaEjercicios.addEventListener("submit", async (e) => {
+  if (!e.target.matches(".form-serie")) return;
+  e.preventDefault();
+
+  const form = e.target;
+  const ejercicioId = form.dataset.ejercicioId;
+  const peso = parseFloat(form.querySelector(".input-peso").value);
+  const reps = parseInt(form.querySelector(".input-reps").value, 10);
+  const sensacion = form.querySelector(".input-sensacion").value;
+
+  const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === ejercicioId);
+  ejercicio.series.push({ id: uid(), peso, reps, sensacion });
+
+  await persistirYRenderizar();
+});
+
+listaEjercicios.addEventListener("click", async (e) => {
+  if (e.target.matches(".btn-borrar-ejercicio")) {
+    const ejercicioId = e.target.dataset.ejercicioId;
+    if (!confirm("¿Borrar este ejercicio y todas sus series?")) return;
+    entrenamientoActual.ejercicios = entrenamientoActual.ejercicios.filter((ej) => ej.id !== ejercicioId);
+    await persistirYRenderizar();
+  }
+
+  if (e.target.matches(".btn-borrar-serie")) {
+    const { ejercicioId, serieId } = e.target.dataset;
+    const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === ejercicioId);
+    ejercicio.series = ejercicio.series.filter((s) => s.id !== serieId);
+    await persistirYRenderizar();
   }
 });
 
-// ---------- Exportar / Importar ----------
+// ============================================================
+// Exportar / Importar
+// ============================================================
 
 document.getElementById("btn-export").addEventListener("click", async () => {
-  const series = await obtenerSeries();
-  const blob = new Blob([JSON.stringify(series, null, 2)], { type: "application/json" });
+  const entrenamientos = await obtenerEntrenamientos();
+  const blob = new Blob([JSON.stringify(entrenamientos, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `entrenamientos-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `entrenamientos-${hoyISO()}.json`;
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -148,21 +375,21 @@ document.getElementById("input-import").addEventListener("change", async (e) => 
     const datos = JSON.parse(texto);
     if (!Array.isArray(datos)) throw new Error("formato inválido");
     await reemplazarTodo(datos);
-    await recargar();
-    alert(`Se importaron ${datos.length} series.`);
+    await renderLista();
+    alert(`Se importaron ${datos.length} entrenamientos.`);
   } catch (err) {
     alert("No se pudo leer el archivo. ¿Es un export válido de esta app?");
   }
   e.target.value = "";
 });
 
-// ---------- Storage persistente (pide que el navegador no borre por las suyas) ----------
+// ============================================================
+// Storage persistente + Service worker
+// ============================================================
 
 if (navigator.storage && navigator.storage.persist) {
   navigator.storage.persist();
 }
-
-// ---------- Service Worker ----------
 
 const pill = document.getElementById("status-pill");
 
@@ -180,6 +407,8 @@ if ("serviceWorker" in navigator) {
   pill.textContent = "sw no soportado";
 }
 
-// ---------- Arranque ----------
+// ============================================================
+// Arranque
+// ============================================================
 
-recargar();
+renderLista();
