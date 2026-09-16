@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Registro de Entrenamiento</title>
+<meta name="theme-color" content="#1a1f1c">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <h1>Entrenamiento</h1>
+    <span id="status-pill" class="pill">offline listo</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="card">
+    <h2>Nueva serie</h2>
+    <form id="form-serie">
+      <label>
+        Ejercicio
+        <input type="text" id="ejercicio" placeholder="Press banca" required list="ejercicios-sugeridos">
+        <datalist id="ejercicios-sugeridos"></datalist>
+      </label>
+      <div class="row">
+        <label>
+          Peso (kg)
+          <input type="number" id="peso" step="0.5" min="0" required>
+        </label>
+        <label>
+          Repeticiones
+          <input type="number" id="reps" min="1" required>
+        </label>
+      </div>
+      <button type="submit">Guardar serie</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Historial</h2>
+      <div class="actions">
+        <button id="btn-export" class="ghost">Exportar</button>
+        <label class="ghost file-label">
+          Importar
+          <input type="file" id="input-import" accept="application/json" hidden>
+        </label>
+      </div>
+    </div>
+    <ul id="lista-series" class="lista"></ul>
+    <p id="vacio" class="vacio">Todavía no registraste ninguna serie.</p>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "Registro de Entrenamiento",
+  "short_name": "Entreno",
+  "description": "Trackeo local de ejercicios, pesos y repeticiones",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1a1f1c",
+  "theme_color": "#1a1f1c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
