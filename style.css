@@ -94,11 +94,14 @@ label {
   font-size: 0.82rem;
   color: var(--text-dim);
   flex: 1;
+  min-width: 0;
 }
 
 .row { display: flex; gap: 12px; }
 
 input {
+  width: 100%;
+  min-width: 0;
   background: var(--surface-2);
   border: 1px solid transparent;
   border-radius: 10px;
