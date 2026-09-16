@@ -253,7 +253,7 @@ button:active { transform: scale(0.98); }
 .btn-toggle-ejercicio:active { transform: none; }
 
 .toggle-icono {
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 0.75rem;
   width: 12px;
   flex: none;
