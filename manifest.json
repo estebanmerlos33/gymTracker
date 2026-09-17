@@ -1,6 +1,6 @@
 {
   "name": "Registro de Entrenamiento",
-  "short_name": "Entreno",
+  "short_name": "Gym Tracker",
   "description": "Trackeo local de ejercicios, pesos y repeticiones",
   "start_url": "./index.html",
   "scope": "./",

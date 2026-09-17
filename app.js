@@ -1,13 +1,13 @@
 // ============================================================
 // Capa de persistencia: IndexedDB
 // Estructura: Entrenamiento -> Ejercicio -> Serie -> {peso, reps, sensacion}
-// Además: Plantillas -> {nombre, ejercicios: [nombreEjercicio, ...]}
+// Además: Plantillas -> {nombre, ejercicios: [{id, nombre}, ...]}
 // ============================================================
 
 const DB_NAME = "entrenamiento-db";
 const STORE = "entrenamientos";
 const STORE_PLANTILLAS = "plantillas";
-const DB_VERSION = 3; // v2: jerarquía entrenamiento/ejercicio/serie. v3: plantillas
+const DB_VERSION = 3;
 let dbPromise;
 
 function uid() {
@@ -20,11 +20,15 @@ function escapeHtml(str) {
   }[c]));
 }
 
+function ej(nombre) {
+  return { id: uid(), nombre };
+}
+
 const PLANTILLAS_POR_DEFECTO = [
-  { nombre: "Empuje 1", ejercicios: ["Press banca", "Press militar con mancuernas", "Fondos en paralelas", "Extensión de tríceps en polea", "Elevaciones laterales"] },
-  { nombre: "Tirón 1", ejercicios: ["Dominadas", "Remo con barra", "Jalón al pecho", "Curl de bíceps con barra", "Face pull"] },
-  { nombre: "Pierna 1", ejercicios: ["Sentadilla", "Peso muerto rumano", "Prensa de piernas", "Curl femoral (isquios)", "Elevación de talones (gemelos)"] },
-  { nombre: "Full Body", ejercicios: ["Sentadilla", "Press banca", "Remo con barra", "Press militar", "Curl de bíceps con mancuernas"] }
+  { nombre: "Empuje 1", ejercicios: ["Press banca", "Press militar con mancuernas", "Fondos en paralelas", "Extensión de tríceps en polea", "Elevaciones laterales"].map(ej) },
+  { nombre: "Tirón 1", ejercicios: ["Dominadas", "Remo con barra", "Jalón al pecho", "Curl de bíceps con barra", "Face pull"].map(ej) },
+  { nombre: "Pierna 1", ejercicios: ["Sentadilla", "Peso muerto rumano", "Prensa de piernas", "Curl femoral (isquios)", "Elevación de talones (gemelos)"].map(ej) },
+  { nombre: "Full Body", ejercicios: ["Sentadilla", "Press banca", "Remo con barra", "Press militar", "Curl de bíceps con mancuernas"].map(ej) }
 ];
 
 function abrirDB() {
@@ -86,6 +90,12 @@ function abrirDB() {
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
+}
+
+// Normaliza plantillas viejas (ejercicios como strings sueltos) al formato {id, nombre}
+function normalizarPlantilla(pl) {
+  pl.ejercicios = (pl.ejercicios || []).map((e) => (typeof e === "string" ? { id: uid(), nombre: e } : e));
+  return pl;
 }
 
 // ---------- Entrenamientos ----------
@@ -162,7 +172,7 @@ async function obtenerPlantillas() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PLANTILLAS, "readonly");
     const req = tx.objectStore(STORE_PLANTILLAS).getAll();
-    req.onsuccess = () => resolve(req.result.sort((a, b) => a.id - b.id));
+    req.onsuccess = () => resolve(req.result.sort((a, b) => a.id - b.id).map(normalizarPlantilla));
     req.onerror = () => reject(req.error);
   });
 }
@@ -172,7 +182,7 @@ async function obtenerPlantilla(id) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PLANTILLAS, "readonly");
     const req = tx.objectStore(STORE_PLANTILLAS).get(id);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => resolve(req.result ? normalizarPlantilla(req.result) : req.result);
     req.onerror = () => reject(req.error);
   });
 }
@@ -208,7 +218,7 @@ async function borrarPlantilla(id) {
 }
 
 // ============================================================
-// Utilidades
+// Utilidades varias
 // ============================================================
 
 const SENSACION_LABEL = { facil: "Fácil", normal: "Normal", dificil: "Difícil", extremo: "Extremo" };
@@ -262,7 +272,7 @@ async function actualizarDatalistSugeridos() {
   const nombres = new Set(EJERCICIOS_COMUNES);
   const [entrenamientos, plantillas] = await Promise.all([obtenerEntrenamientos(), obtenerPlantillas()]);
   entrenamientos.forEach((e) => e.ejercicios.forEach((ej) => nombres.add(ej.nombre)));
-  plantillas.forEach((p) => p.ejercicios.forEach((n) => nombres.add(n)));
+  plantillas.forEach((p) => p.ejercicios.forEach((ej) => nombres.add(ej.nombre)));
   datalistSugeridos.innerHTML = [...nombres].map((n) => `<option value="${escapeHtml(n)}">`).join("");
 }
 
@@ -362,7 +372,7 @@ document.getElementById("btn-crear-entrenamiento").addEventListener("click", asy
   if (plantillaNuevo.value) {
     const plantilla = await obtenerPlantilla(Number(plantillaNuevo.value));
     if (plantilla) {
-      ejercicios = plantilla.ejercicios.map((nombre) => ({ id: uid(), nombre, series: [] }));
+      ejercicios = plantilla.ejercicios.map((e) => ({ id: uid(), nombre: e.nombre, series: [] }));
     }
   }
   const id = await crearEntrenamiento(fechaNuevo.value, ejercicios);
@@ -408,11 +418,11 @@ function templateEjercicio(ej) {
   return `
     <section class="card ejercicio-card" data-ejercicio-id="${ej.id}">
       <div class="ejercicio-head">
-        <button type="button" class="btn-toggle-ejercicio" data-ejercicio-id="${ej.id}" aria-expanded="${!colapsado}">
+        <button type="button" class="btn-toggle-icono" data-ejercicio-id="${ej.id}" aria-expanded="${!colapsado}" title="${colapsado ? "Expandir" : "Colapsar"}">
           <span class="toggle-icono">${colapsado ? "▸" : "▾"}</span>
-          <h3>${escapeHtml(ej.nombre)}</h3>
-          ${colapsado ? `<span class="ejercicio-resumen">${totalSeries} serie${totalSeries !== 1 ? "s" : ""}</span>` : ""}
         </button>
+        <input type="text" class="input-nombre-ejercicio" value="${escapeHtml(ej.nombre)}" data-ejercicio-id="${ej.id}" aria-label="Nombre del ejercicio">
+        ${colapsado ? `<span class="ejercicio-resumen">${totalSeries} serie${totalSeries !== 1 ? "s" : ""}</span>` : ""}
         <button class="btn-x btn-borrar-ejercicio" data-ejercicio-id="${ej.id}" title="Borrar ejercicio" aria-label="Borrar ejercicio">✕</button>
       </div>
 
@@ -473,7 +483,7 @@ document.getElementById("btn-borrar-entrenamiento").addEventListener("click", as
 });
 
 listaEjercicios.addEventListener("click", async (e) => {
-  const btnToggle = e.target.closest(".btn-toggle-ejercicio");
+  const btnToggle = e.target.closest(".btn-toggle-icono");
   if (btnToggle) {
     const id = btnToggle.dataset.ejercicioId;
     if (colapsados.has(id)) colapsados.delete(id);
@@ -513,6 +523,25 @@ listaEjercicios.addEventListener("submit", async (e) => {
   await persistirYRenderizar();
 });
 
+// Renombrar un ejercicio del entrenamiento sin borrarlo
+listaEjercicios.addEventListener("change", async (e) => {
+  if (!e.target.matches(".input-nombre-ejercicio")) return;
+  const id = e.target.dataset.ejercicioId;
+  const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === id);
+  if (!ejercicio) return;
+  const nuevoNombre = e.target.value.trim() || ejercicio.nombre;
+  ejercicio.nombre = nuevoNombre;
+  e.target.value = nuevoNombre;
+  await guardarEntrenamiento(entrenamientoActual);
+  await actualizarDatalistSugeridos();
+});
+
+listaEjercicios.addEventListener("keydown", (e) => {
+  if (e.target.matches(".input-nombre-ejercicio") && e.key === "Enter") {
+    e.target.blur();
+  }
+});
+
 // ============================================================
 // Vista: plantillas de entrenamiento
 // ============================================================
@@ -532,10 +561,10 @@ function templatePlantilla(pl) {
       </div>
 
       <ul class="lista-ejercicios-plantilla">
-        ${pl.ejercicios.map((nombre, i) => `
-          <li>
-            <span>${escapeHtml(nombre)}</span>
-            <button class="btn-borrar-serie btn-quitar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-index="${i}" title="Quitar ejercicio">×</button>
+        ${pl.ejercicios.map((e) => `
+          <li class="ejercicio-plantilla-item" data-id="${e.id}">
+            <input type="text" class="input-nombre-ejercicio-plantilla" value="${escapeHtml(e.nombre)}" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" aria-label="Nombre del ejercicio">
+            <button class="btn-borrar-serie btn-quitar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Quitar ejercicio">×</button>
           </li>
         `).join("") || `<li class="serie-vacia">Sin ejercicios todavía.</li>`}
       </ul>
@@ -584,20 +613,36 @@ document.getElementById("btn-crear-plantilla").addEventListener("click", async (
   await renderPlantillasView();
 });
 
-// Cambiar el nombre de una plantilla (se guarda al salir del campo o presionar Enter)
+// Renombrar plantilla o uno de sus ejercicios (sin borrarlo)
 listaPlantillas.addEventListener("change", async (e) => {
-  if (!e.target.matches(".input-nombre-plantilla")) return;
-  const id = Number(e.target.dataset.plantillaId);
-  const plantilla = plantillasCache.find((p) => p.id === id);
-  if (!plantilla) return;
-  const nuevoNombre = e.target.value.trim() || plantilla.nombre;
-  plantilla.nombre = nuevoNombre;
-  e.target.value = nuevoNombre;
-  await guardarPlantilla(plantilla);
+  if (e.target.matches(".input-nombre-plantilla")) {
+    const id = Number(e.target.dataset.plantillaId);
+    const plantilla = plantillasCache.find((p) => p.id === id);
+    if (!plantilla) return;
+    const nuevoNombre = e.target.value.trim() || plantilla.nombre;
+    plantilla.nombre = nuevoNombre;
+    e.target.value = nuevoNombre;
+    await guardarPlantilla(plantilla);
+    return;
+  }
+
+  if (e.target.matches(".input-nombre-ejercicio-plantilla")) {
+    const plantillaId = Number(e.target.dataset.plantillaId);
+    const ejercicioId = e.target.dataset.ejercicioId;
+    const plantilla = plantillasCache.find((p) => p.id === plantillaId);
+    if (!plantilla) return;
+    const ejercicio = plantilla.ejercicios.find((ej) => ej.id === ejercicioId);
+    if (!ejercicio) return;
+    const nuevoNombre = e.target.value.trim() || ejercicio.nombre;
+    ejercicio.nombre = nuevoNombre;
+    e.target.value = nuevoNombre;
+    await guardarPlantilla(plantilla);
+    await actualizarDatalistSugeridos();
+  }
 });
 
 listaPlantillas.addEventListener("keydown", (e) => {
-  if (e.target.matches(".input-nombre-plantilla") && e.key === "Enter") {
+  if (e.target.matches(".input-nombre-plantilla, .input-nombre-ejercicio-plantilla") && e.key === "Enter") {
     e.target.blur();
   }
 });
@@ -613,11 +658,11 @@ listaPlantillas.addEventListener("click", async (e) => {
   }
 
   if (e.target.matches(".btn-quitar-ejercicio-plantilla")) {
-    const id = Number(e.target.dataset.plantillaId);
-    const index = Number(e.target.dataset.index);
-    const plantilla = plantillasCache.find((p) => p.id === id);
+    const plantillaId = Number(e.target.dataset.plantillaId);
+    const ejercicioId = e.target.dataset.ejercicioId;
+    const plantilla = plantillasCache.find((p) => p.id === plantillaId);
     if (!plantilla) return;
-    plantilla.ejercicios.splice(index, 1);
+    plantilla.ejercicios = plantilla.ejercicios.filter((ej) => ej.id !== ejercicioId);
     await guardarPlantilla(plantilla);
     reRenderPlantillaCard(plantilla);
   }
@@ -635,7 +680,7 @@ listaPlantillas.addEventListener("submit", async (e) => {
 
   const plantilla = plantillasCache.find((p) => p.id === id);
   if (!plantilla) return;
-  plantilla.ejercicios.push(nombre);
+  plantilla.ejercicios.push({ id: uid(), nombre });
   await guardarPlantilla(plantilla);
   reRenderPlantillaCard(plantilla);
   await actualizarDatalistSugeridos();

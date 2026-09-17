@@ -255,43 +255,47 @@ button:active { transform: scale(0.98); }
 .ejercicio-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
 }
 
-.btn-toggle-ejercicio {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.btn-toggle-icono {
+  flex: none;
   background: none;
   border: none;
-  padding: 0;
+  padding: 6px 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.input-nombre-ejercicio {
   flex: 1;
   min-width: 0;
-  text-align: left;
-  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--text);
-}
-
-.btn-toggle-ejercicio:active { transform: none; }
-
-.toggle-icono {
-  color: var(--text-dim);
-  font-size: 0.75rem;
-  width: 12px;
-  flex: none;
-}
-
-.ejercicio-head h3 {
-  margin: 0;
   font-size: 1rem;
   font-weight: 600;
+  padding: 6px 6px;
+}
+
+.input-nombre-ejercicio:focus {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  border-radius: 8px;
+}
+
+.toggle-icono {
+  font-size: 0.75rem;
 }
 
 .ejercicio-resumen {
   color: var(--text-dim);
   font-size: 0.78rem;
   font-weight: 400;
+  flex: none;
+  white-space: nowrap;
 }
 
 .ejercicio-contenido {
@@ -390,14 +394,31 @@ button:active { transform: scale(0.98); }
 .lista-ejercicios-plantilla li {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 2px;
+  gap: 6px;
+  padding: 4px 0;
   border-bottom: 1px solid var(--surface-2);
   font-size: 0.88rem;
 }
 
 .lista-ejercicios-plantilla li:last-child { border-bottom: none; }
+
+.lista-ejercicios-plantilla li.serie-vacia { padding: 9px 2px; }
+
+.input-nombre-ejercicio-plantilla {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-size: 0.88rem;
+  padding: 8px 6px;
+}
+
+.input-nombre-ejercicio-plantilla:focus {
+  background: var(--bg);
+  border-color: var(--accent);
+  border-radius: 8px;
+}
 
 .form-agregar-ejercicio-plantilla {
   display: flex;
