@@ -309,7 +309,7 @@ function templateEjercicio(ej) {
           <h3>${ej.nombre}</h3>
           ${colapsado ? `<span class="ejercicio-resumen">${totalSeries} serie${totalSeries !== 1 ? "s" : ""}</span>` : ""}
         </button>
-        <button class="ghost danger btn-borrar-ejercicio" data-ejercicio-id="${ej.id}">Borrar ejercicio</button>
+        <button class="ghost danger btn-borrar-ejercicio" data-ejercicio-id="${ej.id}">X</button>
       </div>
 
       <div class="ejercicio-contenido ${colapsado ? "hidden" : ""}">
