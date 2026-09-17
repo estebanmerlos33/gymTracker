@@ -301,9 +301,11 @@ function irALista() {
   renderLista();
 }
 
-async function irADetalle(id) {
+async function irADetalle(id, colapsarTodoAlEntrar = false) {
   entrenamientoActual = await obtenerEntrenamiento(id);
-  colapsados = new Set();
+  colapsados = colapsarTodoAlEntrar
+    ? new Set(entrenamientoActual.ejercicios.map((ej) => ej.id))
+    : new Set();
   ocultarTodasLasVistas();
   viewDetalle.classList.remove("hidden");
   renderDetalle();
@@ -378,7 +380,7 @@ document.getElementById("btn-crear-entrenamiento").addEventListener("click", asy
   const id = await crearEntrenamiento(fechaNuevo.value, ejercicios);
   formNuevoWrap.classList.add("hidden");
   btnNuevo.classList.remove("hidden");
-  await irADetalle(id);
+  await irADetalle(id, true);
 });
 
 listaEntrenamientos.addEventListener("click", (e) => {
@@ -399,12 +401,13 @@ const detalleFecha = document.getElementById("detalle-fecha");
 const listaEjercicios = document.getElementById("lista-ejercicios");
 
 function templateSerie(ejercicioId, serie) {
+  const duracionTexto = serie.duracion ? ` · ${serie.duracion}s` : "";
   const pill = serie.sensacion
     ? `<span class="sensacion-pill sensacion-${serie.sensacion}">${SENSACION_LABEL[serie.sensacion]}</span>`
     : "";
   return `
     <li>
-      <span class="serie-detalle">${serie.peso} kg × ${serie.reps} reps</span>
+      <span class="serie-detalle">${serie.peso} kg × ${serie.reps} reps${duracionTexto}</span>
       ${pill}
       <button class="btn-borrar-serie" data-ejercicio-id="${ejercicioId}" data-serie-id="${serie.id}" title="Borrar serie">×</button>
     </li>
@@ -436,6 +439,7 @@ function templateEjercicio(ej) {
             <input type="number" class="input-peso" placeholder="kg" step="0.5" min="0" required>
             <input type="number" class="input-reps" placeholder="reps" min="1" required>
           </div>
+          <input type="number" class="input-duracion" placeholder="Duración (seg, opcional)" min="0" step="1">
           <select class="input-sensacion">
             <option value="">Sensación (opcional)</option>
             <option value="facil">Fácil</option>
@@ -515,10 +519,12 @@ listaEjercicios.addEventListener("submit", async (e) => {
   const ejercicioId = form.dataset.ejercicioId;
   const peso = parseFloat(form.querySelector(".input-peso").value);
   const reps = parseInt(form.querySelector(".input-reps").value, 10);
+  const duracionValor = form.querySelector(".input-duracion").value;
+  const duracion = duracionValor ? parseInt(duracionValor, 10) : null;
   const sensacion = form.querySelector(".input-sensacion").value;
 
   const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === ejercicioId);
-  ejercicio.series.push({ id: uid(), peso, reps, sensacion });
+  ejercicio.series.push({ id: uid(), peso, reps, duracion, sensacion });
 
   await persistirYRenderizar();
 });
