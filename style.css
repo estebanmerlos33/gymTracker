@@ -140,7 +140,12 @@ button {
 
 button:active { transform: scale(0.98); }
 
-.actions { display: flex; gap: 8px; }
+.actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
 
 .ghost {
   background: transparent;
@@ -152,7 +157,24 @@ button:active { transform: scale(0.98); }
   border-radius: 8px;
 }
 
-.ghost.danger { color: var(--danger); }
+.btn-x {
+  background: none;
+  border: 1px solid var(--surface-2);
+  color: var(--danger);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.btn-x:active { transform: scale(0.94); }
 
 .file-label {
   display: inline-flex;
@@ -328,4 +350,71 @@ button:active { transform: scale(0.98); }
   gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--surface-2);
+}
+
+/* ---------- Plantillas de entrenamiento ---------- */
+
+.plantilla-card { display: flex; flex-direction: column; gap: 12px; }
+
+.plantilla-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-nombre-plantilla {
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 6px 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.input-nombre-plantilla:focus {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  border-radius: 8px;
+}
+
+.lista-ejercicios-plantilla {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lista-ejercicios-plantilla li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--surface-2);
+  font-size: 0.88rem;
+}
+
+.lista-ejercicios-plantilla li:last-child { border-bottom: none; }
+
+.form-agregar-ejercicio-plantilla {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--surface-2);
+}
+
+.form-agregar-ejercicio-plantilla input {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-agregar-ejercicio-plantilla button {
+  flex: none;
+  white-space: nowrap;
+  padding: 11px 14px;
+  font-size: 0.85rem;
 }

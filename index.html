@@ -27,19 +27,27 @@
     <section class="card">
       <div class="card-head">
         <h2>Entrenamientos</h2>
-        <div class="actions">
-          <button id="btn-export" class="ghost">Exportar</button>
-          <label class="ghost file-label">
-            Importar
-            <input type="file" id="input-import" accept="application/json" hidden>
-          </label>
-        </div>
+      </div>
+
+      <div class="actions-row">
+        <button id="btn-plantillas" class="ghost">Plantillas</button>
+        <button id="btn-export" class="ghost">Exportar</button>
+        <label class="ghost file-label">
+          Importar
+          <input type="file" id="input-import" accept="application/json" hidden>
+        </label>
       </div>
 
       <div id="form-nuevo-wrap" class="form-nuevo hidden">
         <label>
           Fecha del entrenamiento
           <input type="date" id="fecha-nuevo">
+        </label>
+        <label>
+          Plantilla (opcional)
+          <select id="plantilla-nuevo">
+            <option value="">Sin plantilla (vacío)</option>
+          </select>
         </label>
         <div class="form-actions">
           <button id="btn-crear-entrenamiento">Crear entrenamiento</button>
@@ -60,7 +68,7 @@
 
     <section class="card detalle-header">
       <h2 id="detalle-fecha"></h2>
-      <button id="btn-borrar-entrenamiento" class="ghost danger">X</button>
+      <button id="btn-borrar-entrenamiento" class="btn-x" title="Borrar entrenamiento" aria-label="Borrar entrenamiento">✕</button>
     </section>
 
     <div id="lista-ejercicios"></div>
@@ -73,6 +81,33 @@
         <button type="submit">Agregar ejercicio</button>
       </form>
     </section>
+  </section>
+
+  <!-- ---------- Vista: plantillas de entrenamiento ---------- -->
+  <section id="view-plantillas" class="view hidden">
+    <button id="btn-volver-plantillas" class="ghost btn-volver">‹ Volver</button>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Plantillas de entrenamiento</h2>
+      </div>
+
+      <div id="form-nueva-plantilla-wrap" class="form-nuevo hidden">
+        <label>
+          Nombre de la plantilla
+          <input type="text" id="nombre-nueva-plantilla" placeholder="Ej: Empuje 1">
+        </label>
+        <div class="form-actions">
+          <button id="btn-crear-plantilla">Crear plantilla</button>
+          <button id="btn-cancelar-nueva-plantilla" class="ghost" type="button">Cancelar</button>
+        </div>
+      </div>
+
+      <button id="btn-nueva-plantilla" class="btn-nuevo">+ Nueva plantilla</button>
+    </section>
+
+    <div id="lista-plantillas"></div>
+    <p id="vacio-plantillas" class="vacio hidden">Todavía no creaste ninguna plantilla.</p>
   </section>
 
 </main>

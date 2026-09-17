@@ -1,16 +1,31 @@
 // ============================================================
 // Capa de persistencia: IndexedDB
 // Estructura: Entrenamiento -> Ejercicio -> Serie -> {peso, reps, sensacion}
+// Además: Plantillas -> {nombre, ejercicios: [nombreEjercicio, ...]}
 // ============================================================
 
 const DB_NAME = "entrenamiento-db";
 const STORE = "entrenamientos";
-const DB_VERSION = 2; // v2: pasa de series sueltas a entrenamientos con jerarquía
+const STORE_PLANTILLAS = "plantillas";
+const DB_VERSION = 3; // v2: jerarquía entrenamiento/ejercicio/serie. v3: plantillas
 let dbPromise;
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+const PLANTILLAS_POR_DEFECTO = [
+  { nombre: "Empuje 1", ejercicios: ["Press banca", "Press militar con mancuernas", "Fondos en paralelas", "Extensión de tríceps en polea", "Elevaciones laterales"] },
+  { nombre: "Tirón 1", ejercicios: ["Dominadas", "Remo con barra", "Jalón al pecho", "Curl de bíceps con barra", "Face pull"] },
+  { nombre: "Pierna 1", ejercicios: ["Sentadilla", "Peso muerto rumano", "Prensa de piernas", "Curl femoral (isquios)", "Elevación de talones (gemelos)"] },
+  { nombre: "Full Body", ejercicios: ["Sentadilla", "Press banca", "Remo con barra", "Press militar", "Curl de bíceps con mancuernas"] }
+];
 
 function abrirDB() {
   if (dbPromise) return dbPromise;
@@ -25,6 +40,11 @@ function abrirDB() {
         db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
       }
 
+      if (!db.objectStoreNames.contains(STORE_PLANTILLAS)) {
+        const plantillasStore = db.createObjectStore(STORE_PLANTILLAS, { keyPath: "id", autoIncrement: true });
+        PLANTILLAS_POR_DEFECTO.forEach((p) => plantillasStore.add(p));
+      }
+
       // Migración desde la versión anterior (store "series", plana, sin jerarquía)
       if (db.objectStoreNames.contains("series")) {
         const oldStore = tx.objectStore("series");
@@ -32,7 +52,6 @@ function abrirDB() {
 
         oldStore.getAll().onsuccess = (e) => {
           const viejas = e.target.result || [];
-          // Agrupa series viejas por día y por nombre de ejercicio
           const porFecha = {};
           for (const s of viejas) {
             const d = new Date(s.fecha);
@@ -45,7 +64,7 @@ function abrirDB() {
               id: uid(),
               peso: s.peso,
               reps: s.reps,
-              sensacion: "" // el modelo viejo no tenía este campo
+              sensacion: ""
             });
           }
 
@@ -69,12 +88,14 @@ function abrirDB() {
   return dbPromise;
 }
 
-async function crearEntrenamiento(fechaISO) {
+// ---------- Entrenamientos ----------
+
+async function crearEntrenamiento(fechaISO, ejercicios = []) {
   const db = await abrirDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
-    const req = tx.objectStore(STORE).add({ fecha: fechaISO, ejercicios: [] });
-    req.onsuccess = () => resolve(req.result); // devuelve el id nuevo
+    const req = tx.objectStore(STORE).add({ fecha: fechaISO, ejercicios });
+    req.onsuccess = () => resolve(req.result);
     tx.onerror = () => reject(tx.error);
   });
 }
@@ -126,9 +147,61 @@ async function reemplazarTodo(entrenamientos) {
     const store = tx.objectStore(STORE);
     store.clear();
     for (const e of entrenamientos) {
-      const { id, ...resto } = e; // el id lo regenera autoIncrement
+      const { id, ...resto } = e;
       store.add(resto);
     }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ---------- Plantillas ----------
+
+async function obtenerPlantillas() {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PLANTILLAS, "readonly");
+    const req = tx.objectStore(STORE_PLANTILLAS).getAll();
+    req.onsuccess = () => resolve(req.result.sort((a, b) => a.id - b.id));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function obtenerPlantilla(id) {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PLANTILLAS, "readonly");
+    const req = tx.objectStore(STORE_PLANTILLAS).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function crearPlantilla(nombre) {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PLANTILLAS, "readwrite");
+    const req = tx.objectStore(STORE_PLANTILLAS).add({ nombre, ejercicios: [] });
+    req.onsuccess = () => resolve(req.result);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function guardarPlantilla(plantilla) {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PLANTILLAS, "readwrite");
+    tx.objectStore(STORE_PLANTILLAS).put(plantilla);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function borrarPlantilla(id) {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PLANTILLAS, "readwrite");
+    tx.objectStore(STORE_PLANTILLAS).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -141,35 +214,28 @@ async function reemplazarTodo(entrenamientos) {
 const SENSACION_LABEL = { facil: "Fácil", normal: "Normal", dificil: "Difícil", extremo: "Extremo" };
 
 const EJERCICIOS_COMUNES = [
-  // Pecho
   "Press banca", "Press banca inclinado", "Press banca declinado",
   "Press con mancuernas", "Press inclinado con mancuernas",
   "Aperturas con mancuernas", "Aperturas en polea (cruce de poleas)",
   "Press en máquina", "Pec deck (contractora)",
-  // Espalda
   "Dominadas", "Dominadas supinas (chin-up)", "Jalón al pecho",
   "Remo con barra", "Remo con mancuerna", "Remo en polea baja",
   "Remo en máquina", "Peso muerto", "Peso muerto rumano",
   "Pull-over", "Hiperextensiones",
-  // Piernas
   "Sentadilla", "Sentadilla frontal", "Sentadilla búlgara",
   "Sentadilla hack", "Prensa de piernas", "Zancadas",
   "Peso muerto a una pierna", "Extensión de cuádriceps",
   "Curl femoral (isquios)", "Elevación de talones (gemelos)",
   "Hip thrust", "Puente de glúteos", "Abducción de cadera",
-  // Hombros
   "Press militar", "Press militar con mancuernas", "Press Arnold",
   "Elevaciones laterales", "Elevaciones frontales",
   "Pájaros (deltoide posterior)", "Face pull", "Encogimientos (trapecio)",
-  // Brazos
   "Curl de bíceps con barra", "Curl de bíceps con mancuernas",
   "Curl martillo", "Curl predicador", "Press francés",
   "Extensión de tríceps en polea", "Fondos en banco (tríceps)",
   "Fondos en paralelas",
-  // Core
   "Plancha (plank)", "Abdominales crunch", "Elevación de piernas colgado",
   "Rueda abdominal (ab wheel)", "Russian twist", "Plancha lateral",
-  // Calistenia
   "Flexiones de brazos (push-up)", "Flexiones diamante",
   "Flexiones con palmada", "Fondos en anillas", "Muscle-up",
   "Sentadilla pistol", "Sentadilla a una pierna asistida",
@@ -190,19 +256,37 @@ function formatearFechaISO(iso) {
   return `${d}/${m}/${y}`;
 }
 
+const datalistSugeridos = document.getElementById("ejercicios-sugeridos");
+
+async function actualizarDatalistSugeridos() {
+  const nombres = new Set(EJERCICIOS_COMUNES);
+  const [entrenamientos, plantillas] = await Promise.all([obtenerEntrenamientos(), obtenerPlantillas()]);
+  entrenamientos.forEach((e) => e.ejercicios.forEach((ej) => nombres.add(ej.nombre)));
+  plantillas.forEach((p) => p.ejercicios.forEach((n) => nombres.add(n)));
+  datalistSugeridos.innerHTML = [...nombres].map((n) => `<option value="${escapeHtml(n)}">`).join("");
+}
+
 // ============================================================
 // Estado y navegación entre vistas
 // ============================================================
 
-let entrenamientoActual = null; // objeto completo mientras se edita el detalle
-let colapsados = new Set(); // ids de ejercicios colapsados en la vista actual
+let entrenamientoActual = null;
+let colapsados = new Set();
+let plantillasCache = [];
 
 const viewLista = document.getElementById("view-lista");
 const viewDetalle = document.getElementById("view-detalle");
+const viewPlantillas = document.getElementById("view-plantillas");
+
+function ocultarTodasLasVistas() {
+  viewLista.classList.add("hidden");
+  viewDetalle.classList.add("hidden");
+  viewPlantillas.classList.add("hidden");
+}
 
 function irALista() {
   entrenamientoActual = null;
-  viewDetalle.classList.add("hidden");
+  ocultarTodasLasVistas();
   viewLista.classList.remove("hidden");
   renderLista();
 }
@@ -210,9 +294,15 @@ function irALista() {
 async function irADetalle(id) {
   entrenamientoActual = await obtenerEntrenamiento(id);
   colapsados = new Set();
-  viewLista.classList.add("hidden");
+  ocultarTodasLasVistas();
   viewDetalle.classList.remove("hidden");
   renderDetalle();
+}
+
+async function irAPlantillas() {
+  ocultarTodasLasVistas();
+  viewPlantillas.classList.remove("hidden");
+  await renderPlantillasView();
 }
 
 // ============================================================
@@ -224,6 +314,7 @@ const vacio = document.getElementById("vacio");
 const btnNuevo = document.getElementById("btn-nuevo");
 const formNuevoWrap = document.getElementById("form-nuevo-wrap");
 const fechaNuevo = document.getElementById("fecha-nuevo");
+const plantillaNuevo = document.getElementById("plantilla-nuevo");
 
 async function renderLista() {
   const entrenamientos = await obtenerEntrenamientos();
@@ -244,10 +335,15 @@ async function renderLista() {
       </li>
     `;
   }).join("");
+
+  await actualizarDatalistSugeridos();
 }
 
-btnNuevo.addEventListener("click", () => {
+btnNuevo.addEventListener("click", async () => {
   fechaNuevo.value = hoyISO();
+  plantillasCache = await obtenerPlantillas();
+  plantillaNuevo.innerHTML = `<option value="">Sin plantilla (vacío)</option>` +
+    plantillasCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join("");
   formNuevoWrap.classList.remove("hidden");
   btnNuevo.classList.add("hidden");
 });
@@ -262,7 +358,14 @@ document.getElementById("btn-crear-entrenamiento").addEventListener("click", asy
     alert("Elegí una fecha para el entrenamiento.");
     return;
   }
-  const id = await crearEntrenamiento(fechaNuevo.value);
+  let ejercicios = [];
+  if (plantillaNuevo.value) {
+    const plantilla = await obtenerPlantilla(Number(plantillaNuevo.value));
+    if (plantilla) {
+      ejercicios = plantilla.ejercicios.map((nombre) => ({ id: uid(), nombre, series: [] }));
+    }
+  }
+  const id = await crearEntrenamiento(fechaNuevo.value, ejercicios);
   formNuevoWrap.classList.add("hidden");
   btnNuevo.classList.remove("hidden");
   await irADetalle(id);
@@ -275,6 +378,8 @@ listaEntrenamientos.addEventListener("click", (e) => {
 });
 
 document.getElementById("btn-volver").addEventListener("click", irALista);
+document.getElementById("btn-plantillas").addEventListener("click", irAPlantillas);
+document.getElementById("btn-volver-plantillas").addEventListener("click", irALista);
 
 // ============================================================
 // Vista: detalle de un entrenamiento
@@ -282,7 +387,6 @@ document.getElementById("btn-volver").addEventListener("click", irALista);
 
 const detalleFecha = document.getElementById("detalle-fecha");
 const listaEjercicios = document.getElementById("lista-ejercicios");
-const datalistSugeridos = document.getElementById("ejercicios-sugeridos");
 
 function templateSerie(ejercicioId, serie) {
   const pill = serie.sensacion
@@ -306,10 +410,10 @@ function templateEjercicio(ej) {
       <div class="ejercicio-head">
         <button type="button" class="btn-toggle-ejercicio" data-ejercicio-id="${ej.id}" aria-expanded="${!colapsado}">
           <span class="toggle-icono">${colapsado ? "▸" : "▾"}</span>
-          <h3>${ej.nombre}</h3>
+          <h3>${escapeHtml(ej.nombre)}</h3>
           ${colapsado ? `<span class="ejercicio-resumen">${totalSeries} serie${totalSeries !== 1 ? "s" : ""}</span>` : ""}
         </button>
-        <button class="ghost danger btn-borrar-ejercicio" data-ejercicio-id="${ej.id}">X</button>
+        <button class="btn-x btn-borrar-ejercicio" data-ejercicio-id="${ej.id}" title="Borrar ejercicio" aria-label="Borrar ejercicio">✕</button>
       </div>
 
       <div class="ejercicio-contenido ${colapsado ? "hidden" : ""}">
@@ -343,13 +447,7 @@ function renderEjercicios() {
 async function renderDetalle() {
   detalleFecha.textContent = formatearFechaISO(entrenamientoActual.fecha);
   renderEjercicios();
-
-  // Autocompletar: nombres que el usuario ya usó + lista de ejercicios comunes
-  const todos = await obtenerEntrenamientos();
-  const nombres = new Set();
-  todos.forEach((e) => e.ejercicios.forEach((ej) => nombres.add(ej.nombre)));
-  EJERCICIOS_COMUNES.forEach((n) => nombres.add(n));
-  datalistSugeridos.innerHTML = [...nombres].map((n) => `<option value="${n}">`).join("");
+  await actualizarDatalistSugeridos();
 }
 
 async function persistirYRenderizar() {
@@ -372,23 +470,6 @@ document.getElementById("btn-borrar-entrenamiento").addEventListener("click", as
   if (!confirm("¿Borrar este entrenamiento completo? No se puede deshacer.")) return;
   await borrarEntrenamiento(entrenamientoActual.id);
   irALista();
-});
-
-// Delegación de eventos dentro de la lista de ejercicios
-listaEjercicios.addEventListener("submit", async (e) => {
-  if (!e.target.matches(".form-serie")) return;
-  e.preventDefault();
-
-  const form = e.target;
-  const ejercicioId = form.dataset.ejercicioId;
-  const peso = parseFloat(form.querySelector(".input-peso").value);
-  const reps = parseInt(form.querySelector(".input-reps").value, 10);
-  const sensacion = form.querySelector(".input-sensacion").value;
-
-  const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === ejercicioId);
-  ejercicio.series.push({ id: uid(), peso, reps, sensacion });
-
-  await persistirYRenderizar();
 });
 
 listaEjercicios.addEventListener("click", async (e) => {
@@ -414,6 +495,150 @@ listaEjercicios.addEventListener("click", async (e) => {
     ejercicio.series = ejercicio.series.filter((s) => s.id !== serieId);
     await persistirYRenderizar();
   }
+});
+
+listaEjercicios.addEventListener("submit", async (e) => {
+  if (!e.target.matches(".form-serie")) return;
+  e.preventDefault();
+
+  const form = e.target;
+  const ejercicioId = form.dataset.ejercicioId;
+  const peso = parseFloat(form.querySelector(".input-peso").value);
+  const reps = parseInt(form.querySelector(".input-reps").value, 10);
+  const sensacion = form.querySelector(".input-sensacion").value;
+
+  const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === ejercicioId);
+  ejercicio.series.push({ id: uid(), peso, reps, sensacion });
+
+  await persistirYRenderizar();
+});
+
+// ============================================================
+// Vista: plantillas de entrenamiento
+// ============================================================
+
+const listaPlantillas = document.getElementById("lista-plantillas");
+const vacioPlantillas = document.getElementById("vacio-plantillas");
+const btnNuevaPlantilla = document.getElementById("btn-nueva-plantilla");
+const formNuevaPlantillaWrap = document.getElementById("form-nueva-plantilla-wrap");
+const nombreNuevaPlantilla = document.getElementById("nombre-nueva-plantilla");
+
+function templatePlantilla(pl) {
+  return `
+    <section class="card plantilla-card" data-plantilla-id="${pl.id}">
+      <div class="plantilla-head">
+        <input type="text" class="input-nombre-plantilla" value="${escapeHtml(pl.nombre)}" data-plantilla-id="${pl.id}" aria-label="Nombre de la plantilla">
+        <button class="btn-x btn-borrar-plantilla" data-plantilla-id="${pl.id}" title="Borrar plantilla" aria-label="Borrar plantilla">✕</button>
+      </div>
+
+      <ul class="lista-ejercicios-plantilla">
+        ${pl.ejercicios.map((nombre, i) => `
+          <li>
+            <span>${escapeHtml(nombre)}</span>
+            <button class="btn-borrar-serie btn-quitar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-index="${i}" title="Quitar ejercicio">×</button>
+          </li>
+        `).join("") || `<li class="serie-vacia">Sin ejercicios todavía.</li>`}
+      </ul>
+
+      <form class="form-agregar-ejercicio-plantilla" data-plantilla-id="${pl.id}">
+        <input type="text" class="input-nuevo-ejercicio-plantilla" placeholder="Agregar ejercicio" list="ejercicios-sugeridos" autocomplete="off" required>
+        <button type="submit">+ Agregar</button>
+      </form>
+    </section>
+  `;
+}
+
+async function renderPlantillasView() {
+  plantillasCache = await obtenerPlantillas();
+  vacioPlantillas.classList.toggle("hidden", plantillasCache.length > 0);
+  listaPlantillas.innerHTML = plantillasCache.map(templatePlantilla).join("");
+  await actualizarDatalistSugeridos();
+}
+
+function reRenderPlantillaCard(plantilla) {
+  const card = listaPlantillas.querySelector(`.plantilla-card[data-plantilla-id="${plantilla.id}"]`);
+  if (card) card.outerHTML = templatePlantilla(plantilla);
+}
+
+btnNuevaPlantilla.addEventListener("click", () => {
+  nombreNuevaPlantilla.value = "";
+  formNuevaPlantillaWrap.classList.remove("hidden");
+  btnNuevaPlantilla.classList.add("hidden");
+  nombreNuevaPlantilla.focus();
+});
+
+document.getElementById("btn-cancelar-nueva-plantilla").addEventListener("click", () => {
+  formNuevaPlantillaWrap.classList.add("hidden");
+  btnNuevaPlantilla.classList.remove("hidden");
+});
+
+document.getElementById("btn-crear-plantilla").addEventListener("click", async () => {
+  const nombre = nombreNuevaPlantilla.value.trim();
+  if (!nombre) {
+    alert("Ingresá un nombre para la plantilla.");
+    return;
+  }
+  await crearPlantilla(nombre);
+  formNuevaPlantillaWrap.classList.add("hidden");
+  btnNuevaPlantilla.classList.remove("hidden");
+  await renderPlantillasView();
+});
+
+// Cambiar el nombre de una plantilla (se guarda al salir del campo o presionar Enter)
+listaPlantillas.addEventListener("change", async (e) => {
+  if (!e.target.matches(".input-nombre-plantilla")) return;
+  const id = Number(e.target.dataset.plantillaId);
+  const plantilla = plantillasCache.find((p) => p.id === id);
+  if (!plantilla) return;
+  const nuevoNombre = e.target.value.trim() || plantilla.nombre;
+  plantilla.nombre = nuevoNombre;
+  e.target.value = nuevoNombre;
+  await guardarPlantilla(plantilla);
+});
+
+listaPlantillas.addEventListener("keydown", (e) => {
+  if (e.target.matches(".input-nombre-plantilla") && e.key === "Enter") {
+    e.target.blur();
+  }
+});
+
+listaPlantillas.addEventListener("click", async (e) => {
+  if (e.target.matches(".btn-borrar-plantilla")) {
+    const id = Number(e.target.dataset.plantillaId);
+    if (!confirm("¿Borrar esta plantilla? No se puede deshacer.")) return;
+    await borrarPlantilla(id);
+    plantillasCache = plantillasCache.filter((p) => p.id !== id);
+    await renderPlantillasView();
+    return;
+  }
+
+  if (e.target.matches(".btn-quitar-ejercicio-plantilla")) {
+    const id = Number(e.target.dataset.plantillaId);
+    const index = Number(e.target.dataset.index);
+    const plantilla = plantillasCache.find((p) => p.id === id);
+    if (!plantilla) return;
+    plantilla.ejercicios.splice(index, 1);
+    await guardarPlantilla(plantilla);
+    reRenderPlantillaCard(plantilla);
+  }
+});
+
+listaPlantillas.addEventListener("submit", async (e) => {
+  if (!e.target.matches(".form-agregar-ejercicio-plantilla")) return;
+  e.preventDefault();
+
+  const form = e.target;
+  const id = Number(form.dataset.plantillaId);
+  const input = form.querySelector(".input-nuevo-ejercicio-plantilla");
+  const nombre = input.value.trim();
+  if (!nombre) return;
+
+  const plantilla = plantillasCache.find((p) => p.id === id);
+  if (!plantilla) return;
+  plantilla.ejercicios.push(nombre);
+  await guardarPlantilla(plantilla);
+  reRenderPlantillaCard(plantilla);
+  await actualizarDatalistSugeridos();
 });
 
 // ============================================================
