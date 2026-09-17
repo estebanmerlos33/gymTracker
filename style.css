@@ -269,6 +269,31 @@ button:active { transform: scale(0.98); }
   align-items: center;
 }
 
+.btn-orden-grupo {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 2px;
+}
+
+.btn-orden {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.6rem;
+  line-height: 1;
+  padding: 2px 5px;
+  cursor: pointer;
+}
+
+.btn-orden:disabled {
+  color: var(--text-dim);
+  opacity: 0.3;
+  cursor: default;
+}
+
+.btn-orden:active:not(:disabled) { transform: scale(0.9); }
+
 .input-nombre-ejercicio {
   flex: 1;
   min-width: 0;

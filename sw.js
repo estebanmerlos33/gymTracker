@@ -1,4 +1,4 @@
-const CACHE_NAME = "entreno-cache-v10";
+const CACHE_NAME = "entreno-cache-v11";
 
 const ARCHIVOS = [
   "./",

@@ -414,7 +414,7 @@ function templateSerie(ejercicioId, serie) {
   `;
 }
 
-function templateEjercicio(ej) {
+function templateEjercicio(ej, index, total) {
   const colapsado = colapsados.has(ej.id);
   const totalSeries = ej.series.length;
 
@@ -426,6 +426,10 @@ function templateEjercicio(ej) {
         </button>
         <input type="text" class="input-nombre-ejercicio" value="${escapeHtml(ej.nombre)}" data-ejercicio-id="${ej.id}" aria-label="Nombre del ejercicio">
         ${colapsado ? `<span class="ejercicio-resumen">${totalSeries} serie${totalSeries !== 1 ? "s" : ""}</span>` : ""}
+        <div class="btn-orden-grupo">
+          <button class="btn-orden btn-subir-ejercicio" data-ejercicio-id="${ej.id}" title="Subir" aria-label="Subir ejercicio" ${index === 0 ? "disabled" : ""}>▲</button>
+          <button class="btn-orden btn-bajar-ejercicio" data-ejercicio-id="${ej.id}" title="Bajar" aria-label="Bajar ejercicio" ${index === total - 1 ? "disabled" : ""}>▼</button>
+        </div>
         <button class="btn-x btn-borrar-ejercicio" data-ejercicio-id="${ej.id}" title="Borrar ejercicio" aria-label="Borrar ejercicio">✕</button>
       </div>
 
@@ -455,7 +459,10 @@ function templateEjercicio(ej) {
 }
 
 function renderEjercicios() {
-  listaEjercicios.innerHTML = entrenamientoActual.ejercicios.map(templateEjercicio).join("");
+  const total = entrenamientoActual.ejercicios.length;
+  listaEjercicios.innerHTML = entrenamientoActual.ejercicios
+    .map((ej, index) => templateEjercicio(ej, index, total))
+    .join("");
 }
 
 async function renderDetalle() {
@@ -492,6 +499,20 @@ listaEjercicios.addEventListener("click", async (e) => {
     const id = btnToggle.dataset.ejercicioId;
     if (colapsados.has(id)) colapsados.delete(id);
     else colapsados.add(id);
+    renderEjercicios();
+    return;
+  }
+
+  const btnSubir = e.target.closest(".btn-subir-ejercicio");
+  const btnBajar = e.target.closest(".btn-bajar-ejercicio");
+  if (btnSubir || btnBajar) {
+    const id = (btnSubir || btnBajar).dataset.ejercicioId;
+    const ejercicios = entrenamientoActual.ejercicios;
+    const index = ejercicios.findIndex((ej) => ej.id === id);
+    const destino = btnSubir ? index - 1 : index + 1;
+    if (destino < 0 || destino >= ejercicios.length) return;
+    [ejercicios[index], ejercicios[destino]] = [ejercicios[destino], ejercicios[index]];
+    await guardarEntrenamiento(entrenamientoActual);
     renderEjercicios();
     return;
   }
@@ -567,9 +588,13 @@ function templatePlantilla(pl) {
       </div>
 
       <ul class="lista-ejercicios-plantilla">
-        ${pl.ejercicios.map((e) => `
+        ${pl.ejercicios.map((e, index) => `
           <li class="ejercicio-plantilla-item" data-id="${e.id}">
             <input type="text" class="input-nombre-ejercicio-plantilla" value="${escapeHtml(e.nombre)}" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" aria-label="Nombre del ejercicio">
+            <div class="btn-orden-grupo">
+              <button class="btn-orden btn-subir-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Subir" aria-label="Subir ejercicio" ${index === 0 ? "disabled" : ""}>▲</button>
+              <button class="btn-orden btn-bajar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Bajar" aria-label="Bajar ejercicio" ${index === pl.ejercicios.length - 1 ? "disabled" : ""}>▼</button>
+            </div>
             <button class="btn-borrar-serie btn-quitar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Quitar ejercicio">×</button>
           </li>
         `).join("") || `<li class="serie-vacia">Sin ejercicios todavía.</li>`}
@@ -660,6 +685,23 @@ listaPlantillas.addEventListener("click", async (e) => {
     await borrarPlantilla(id);
     plantillasCache = plantillasCache.filter((p) => p.id !== id);
     await renderPlantillasView();
+    return;
+  }
+
+  const btnSubir = e.target.closest(".btn-subir-ejercicio-plantilla");
+  const btnBajar = e.target.closest(".btn-bajar-ejercicio-plantilla");
+  if (btnSubir || btnBajar) {
+    const boton = btnSubir || btnBajar;
+    const plantillaId = Number(boton.dataset.plantillaId);
+    const ejercicioId = boton.dataset.ejercicioId;
+    const plantilla = plantillasCache.find((p) => p.id === plantillaId);
+    if (!plantilla) return;
+    const index = plantilla.ejercicios.findIndex((ej) => ej.id === ejercicioId);
+    const destino = btnSubir ? index - 1 : index + 1;
+    if (destino < 0 || destino >= plantilla.ejercicios.length) return;
+    [plantilla.ejercicios[index], plantilla.ejercicios[destino]] = [plantilla.ejercicios[destino], plantilla.ejercicios[index]];
+    await guardarPlantilla(plantilla);
+    reRenderPlantillaCard(plantilla);
     return;
   }
 
