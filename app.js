@@ -100,11 +100,11 @@ function normalizarPlantilla(pl) {
 
 // ---------- Entrenamientos ----------
 
-async function crearEntrenamiento(fechaISO, ejercicios = []) {
+async function crearEntrenamiento(fechaISO, tipo = "", ejercicios = []) {
   const db = await abrirDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
-    const req = tx.objectStore(STORE).add({ fecha: fechaISO, ejercicios });
+    const req = tx.objectStore(STORE).add({ fecha: fechaISO, tipo, ejercicios });
     req.onsuccess = () => resolve(req.result);
     tx.onerror = () => reject(tx.error);
   });
@@ -255,6 +255,13 @@ const EJERCICIOS_COMUNES = [
   "Mountain climbers", "Saltos al cajón (box jump)"
 ];
 
+const TIPOS_ENTRENAMIENTO_COMUNES = [
+  "Empuje", "Tirón", "Pierna", "Push", "Pull", "Legs",
+  "Full Body", "Torso", "Cardio", "HIIT",
+  "Pecho", "Espalda", "Hombros", "Brazos", "Core",
+  "Movilidad / Estiramiento", "Descanso activo"
+];
+
 function hoyISO() {
   const d = new Date();
   const tzOffset = d.getTimezoneOffset() * 60000;
@@ -267,6 +274,7 @@ function formatearFechaISO(iso) {
 }
 
 const datalistSugeridos = document.getElementById("ejercicios-sugeridos");
+const datalistTipos = document.getElementById("tipos-sugeridos");
 
 async function actualizarDatalistSugeridos() {
   const nombres = new Set(EJERCICIOS_COMUNES);
@@ -274,6 +282,10 @@ async function actualizarDatalistSugeridos() {
   entrenamientos.forEach((e) => e.ejercicios.forEach((ej) => nombres.add(ej.nombre)));
   plantillas.forEach((p) => p.ejercicios.forEach((ej) => nombres.add(ej.nombre)));
   datalistSugeridos.innerHTML = [...nombres].map((n) => `<option value="${escapeHtml(n)}">`).join("");
+
+  const tipos = new Set(TIPOS_ENTRENAMIENTO_COMUNES);
+  entrenamientos.forEach((e) => { if (e.tipo) tipos.add(e.tipo); });
+  datalistTipos.innerHTML = [...tipos].map((t) => `<option value="${escapeHtml(t)}">`).join("");
 }
 
 // ============================================================
@@ -326,6 +338,7 @@ const vacio = document.getElementById("vacio");
 const btnNuevo = document.getElementById("btn-nuevo");
 const formNuevoWrap = document.getElementById("form-nuevo-wrap");
 const fechaNuevo = document.getElementById("fecha-nuevo");
+const tipoNuevo = document.getElementById("tipo-nuevo");
 const plantillaNuevo = document.getElementById("plantilla-nuevo");
 
 async function renderLista() {
@@ -334,10 +347,11 @@ async function renderLista() {
 
   listaEntrenamientos.innerHTML = entrenamientos.map((e) => {
     const totalSeries = e.ejercicios.reduce((acc, ej) => acc + ej.series.length, 0);
+    const tipoBadge = e.tipo ? `<span class="tipo-badge">${escapeHtml(e.tipo)}</span>` : "";
     return `
       <li data-id="${e.id}">
         <div>
-          <div class="entrenamiento-fecha">${formatearFechaISO(e.fecha)}</div>
+          <div class="entrenamiento-fecha">${formatearFechaISO(e.fecha)}${tipoBadge}</div>
           <div class="entrenamiento-resumen">
             ${e.ejercicios.length} ejercicio${e.ejercicios.length !== 1 ? "s" : ""}
             · ${totalSeries} serie${totalSeries !== 1 ? "s" : ""}
@@ -353,11 +367,20 @@ async function renderLista() {
 
 btnNuevo.addEventListener("click", async () => {
   fechaNuevo.value = hoyISO();
+  tipoNuevo.value = "";
   plantillasCache = await obtenerPlantillas();
   plantillaNuevo.innerHTML = `<option value="">Sin plantilla (vacío)</option>` +
     plantillasCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join("");
   formNuevoWrap.classList.remove("hidden");
   btnNuevo.classList.add("hidden");
+});
+
+// Si el usuario elige una plantilla y todavía no escribió un tipo, lo sugerimos
+// con el nombre de la plantilla (ej: "Empuje 1"), pero se puede editar o borrar.
+plantillaNuevo.addEventListener("change", () => {
+  if (!plantillaNuevo.value || tipoNuevo.value.trim()) return;
+  const plantilla = plantillasCache.find((p) => p.id === Number(plantillaNuevo.value));
+  if (plantilla) tipoNuevo.value = plantilla.nombre;
 });
 
 document.getElementById("btn-cancelar-nuevo").addEventListener("click", () => {
@@ -377,7 +400,7 @@ document.getElementById("btn-crear-entrenamiento").addEventListener("click", asy
       ejercicios = plantilla.ejercicios.map((e) => ({ id: uid(), nombre: e.nombre, series: [] }));
     }
   }
-  const id = await crearEntrenamiento(fechaNuevo.value, ejercicios);
+  const id = await crearEntrenamiento(fechaNuevo.value, tipoNuevo.value.trim(), ejercicios);
   formNuevoWrap.classList.add("hidden");
   btnNuevo.classList.remove("hidden");
   await irADetalle(id, true);
@@ -398,6 +421,7 @@ document.getElementById("btn-volver-plantillas").addEventListener("click", irALi
 // ============================================================
 
 const detalleFecha = document.getElementById("detalle-fecha");
+const tipoEntrenamiento = document.getElementById("tipo-entrenamiento");
 const listaEjercicios = document.getElementById("lista-ejercicios");
 
 function templateSerie(ejercicioId, serie) {
@@ -467,6 +491,7 @@ function renderEjercicios() {
 
 async function renderDetalle() {
   detalleFecha.textContent = formatearFechaISO(entrenamientoActual.fecha);
+  tipoEntrenamiento.value = entrenamientoActual.tipo || "";
   renderEjercicios();
   await actualizarDatalistSugeridos();
 }
@@ -491,6 +516,16 @@ document.getElementById("btn-borrar-entrenamiento").addEventListener("click", as
   if (!confirm("¿Borrar este entrenamiento completo? No se puede deshacer.")) return;
   await borrarEntrenamiento(entrenamientoActual.id);
   irALista();
+});
+
+tipoEntrenamiento.addEventListener("change", async () => {
+  entrenamientoActual.tipo = tipoEntrenamiento.value.trim();
+  await guardarEntrenamiento(entrenamientoActual);
+  await actualizarDatalistSugeridos();
+});
+
+tipoEntrenamiento.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") tipoEntrenamiento.blur();
 });
 
 listaEjercicios.addEventListener("click", async (e) => {

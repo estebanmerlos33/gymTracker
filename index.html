@@ -44,6 +44,10 @@
           <input type="date" id="fecha-nuevo">
         </label>
         <label>
+          Tipo de entrenamiento (opcional)
+          <input type="text" id="tipo-nuevo" placeholder="Ej: Empuje, Pierna, Cardio" list="tipos-sugeridos" autocomplete="off">
+        </label>
+        <label>
           Plantilla (opcional)
           <select id="plantilla-nuevo">
             <option value="">Sin plantilla (vacío)</option>
@@ -54,6 +58,8 @@
           <button id="btn-cancelar-nuevo" class="ghost" type="button">Cancelar</button>
         </div>
       </div>
+
+      <datalist id="tipos-sugeridos"></datalist>
 
       <button id="btn-nuevo" class="btn-nuevo">+ Nuevo entrenamiento</button>
     </section>
@@ -67,8 +73,11 @@
     <button id="btn-volver" class="ghost btn-volver">‹ Volver</button>
 
     <section class="card detalle-header">
-      <h2 id="detalle-fecha"></h2>
-      <button id="btn-borrar-entrenamiento" class="btn-x" title="Borrar entrenamiento" aria-label="Borrar entrenamiento">✕</button>
+      <div class="detalle-header-top">
+        <h2 id="detalle-fecha"></h2>
+        <button id="btn-borrar-entrenamiento" class="btn-x" title="Borrar entrenamiento" aria-label="Borrar entrenamiento">✕</button>
+      </div>
+      <input type="text" id="tipo-entrenamiento" class="input-tipo-entrenamiento" placeholder="Tipo de entrenamiento (opcional)" list="tipos-sugeridos" autocomplete="off">
     </section>
 
     <div id="lista-ejercicios"></div>
