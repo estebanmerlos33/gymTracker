@@ -495,3 +495,70 @@ button:active { transform: scale(0.98); }
   padding: 11px 14px;
   font-size: 0.85rem;
 }
+
+/* ---------- Progreso por ejercicio ---------- */
+
+.progreso-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.progreso-linea {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.progreso-punto {
+  fill: var(--accent);
+}
+
+.progreso-eje {
+  stroke: var(--surface-2);
+  stroke-width: 1.5;
+}
+
+.progreso-grid {
+  stroke: var(--surface-2);
+  stroke-width: 1;
+}
+
+.progreso-etiqueta,
+.progreso-etiqueta-y {
+  fill: var(--text-dim);
+  font-size: 11px;
+}
+
+.progreso-resumen {
+  display: flex;
+  gap: 24px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--surface-2);
+}
+
+.progreso-resumen div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.progreso-resumen strong {
+  font-size: 1.15rem;
+  color: var(--text);
+}
+
+.progreso-resumen span {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.progreso-nota {
+  color: var(--text-dim);
+  font-size: 0.82rem;
+  margin: 14px 0 0;
+  text-align: center;
+}

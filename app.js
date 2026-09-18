@@ -273,6 +273,17 @@ function formatearFechaISO(iso) {
   return `${d}/${m}/${y}`;
 }
 
+// Normaliza un nombre de ejercicio para AGRUPAR (comparar), sin cambiar cómo se muestra:
+// minúsculas, sin tildes, sin espacios de más.
+function normalizarNombre(str) {
+  return String(str)
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
 const datalistSugeridos = document.getElementById("ejercicios-sugeridos");
 const datalistTipos = document.getElementById("tipos-sugeridos");
 
@@ -299,11 +310,13 @@ let plantillasCache = [];
 const viewLista = document.getElementById("view-lista");
 const viewDetalle = document.getElementById("view-detalle");
 const viewPlantillas = document.getElementById("view-plantillas");
+const viewProgreso = document.getElementById("view-progreso");
 
 function ocultarTodasLasVistas() {
   viewLista.classList.add("hidden");
   viewDetalle.classList.add("hidden");
   viewPlantillas.classList.add("hidden");
+  viewProgreso.classList.add("hidden");
 }
 
 function irALista() {
@@ -327,6 +340,12 @@ async function irAPlantillas() {
   ocultarTodasLasVistas();
   viewPlantillas.classList.remove("hidden");
   await renderPlantillasView();
+}
+
+async function irAProgreso() {
+  ocultarTodasLasVistas();
+  viewProgreso.classList.remove("hidden");
+  await renderProgresoView();
 }
 
 // ============================================================
@@ -415,6 +434,8 @@ listaEntrenamientos.addEventListener("click", (e) => {
 document.getElementById("btn-volver").addEventListener("click", irALista);
 document.getElementById("btn-plantillas").addEventListener("click", irAPlantillas);
 document.getElementById("btn-volver-plantillas").addEventListener("click", irALista);
+document.getElementById("btn-progreso").addEventListener("click", irAProgreso);
+document.getElementById("btn-volver-progreso").addEventListener("click", irALista);
 
 // ============================================================
 // Vista: detalle de un entrenamiento
@@ -767,6 +788,147 @@ listaPlantillas.addEventListener("submit", async (e) => {
   await guardarPlantilla(plantilla);
   reRenderPlantillaCard(plantilla);
   await actualizarDatalistSugeridos();
+});
+
+// ============================================================
+// Vista: progreso por ejercicio
+// ============================================================
+
+const selectEjercicioProgreso = document.getElementById("select-ejercicio-progreso");
+const contenedorProgreso = document.getElementById("contenedor-progreso");
+const vacioProgreso = document.getElementById("vacio-progreso");
+
+// Recorre todos los entrenamientos y agrupa las series CON PESO por ejercicio,
+// usando el nombre normalizado como clave para juntar variantes de mayúsculas/tildes/espacios.
+async function obtenerDatosProgreso() {
+  const entrenamientos = (await obtenerEntrenamientos())
+    .slice()
+    .sort((a, b) => a.fecha.localeCompare(b.fecha)); // ascendente: mas viejo primero
+
+  const mapa = new Map(); // clave normalizada -> { nombre, puntos: [{fecha, pesoMax}] }
+
+  for (const entrenamiento of entrenamientos) {
+    for (const ejercicio of entrenamiento.ejercicios) {
+      if (!ejercicio.series.length) continue;
+      const pesos = ejercicio.series.map((s) => s.peso).filter((p) => !isNaN(p));
+      if (!pesos.length) continue;
+      const pesoMax = Math.max(...pesos);
+
+      const clave = normalizarNombre(ejercicio.nombre);
+      if (!mapa.has(clave)) mapa.set(clave, { nombre: ejercicio.nombre, puntos: [] });
+      const entrada = mapa.get(clave);
+      entrada.nombre = ejercicio.nombre; // se queda con el nombre mas reciente (ultima iteracion, orden ascendente)
+      entrada.puntos.push({ fecha: entrenamiento.fecha, pesoMax });
+    }
+  }
+
+  return mapa;
+}
+
+function generarSvgProgreso(puntos, nombreEjercicio) {
+  const W = 600, H = 260;
+  const pad = { top: 20, right: 16, bottom: 34, left: 42 };
+  const anchoUtil = W - pad.left - pad.right;
+  const altoUtil = H - pad.top - pad.bottom;
+
+  const valores = puntos.map((p) => p.pesoMax);
+  const yMax = Math.max(...valores) * 1.15 || 10;
+  const yMin = 0;
+
+  const x = (i) => pad.left + (puntos.length > 1 ? (i / (puntos.length - 1)) * anchoUtil : anchoUtil / 2);
+  const y = (v) => pad.top + altoUtil - ((v - yMin) / (yMax - yMin)) * altoUtil;
+
+  // Lineas de grilla horizontales + etiquetas del eje Y (peso)
+  const nLineas = 4;
+  let grilla = "";
+  for (let i = 0; i <= nLineas; i++) {
+    const valor = (yMax / nLineas) * i;
+    const yy = y(valor);
+    grilla += `<line class="progreso-grid" x1="${pad.left}" y1="${yy}" x2="${W - pad.right}" y2="${yy}" />`;
+    grilla += `<text class="progreso-etiqueta-y" x="${pad.left - 8}" y="${yy + 3}" text-anchor="end">${Math.round(valor)}</text>`;
+  }
+
+  // Elegimos que fechas mostrar en el eje X para que no se amontonen
+  const maxEtiquetas = 6;
+  const paso = Math.max(1, Math.ceil(puntos.length / maxEtiquetas));
+  let etiquetasX = "";
+  puntos.forEach((p, i) => {
+    if (i % paso !== 0 && i !== puntos.length - 1) return;
+    etiquetasX += `<text class="progreso-etiqueta" x="${x(i)}" y="${H - pad.bottom + 16}" text-anchor="middle">${formatearFechaISO(p.fecha).slice(0, 5)}</text>`;
+  });
+
+  const puntosLinea = puntos.map((p, i) => `${x(i)},${y(p.pesoMax)}`).join(" ");
+
+  const circulos = puntos.map((p, i) => `
+    <circle class="progreso-punto" cx="${x(i)}" cy="${y(p.pesoMax)}" r="4">
+      <title>${formatearFechaISO(p.fecha)} · ${p.pesoMax} kg</title>
+    </circle>
+  `).join("");
+
+  const linea = puntos.length > 1
+    ? `<polyline class="progreso-linea" points="${puntosLinea}" />`
+    : "";
+
+  return `
+    <svg class="progreso-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Progreso de ${escapeHtml(nombreEjercicio)}">
+      ${grilla}
+      <line class="progreso-eje" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${H - pad.bottom}" />
+      <line class="progreso-eje" x1="${pad.left}" y1="${H - pad.bottom}" x2="${W - pad.right}" y2="${H - pad.bottom}" />
+      ${linea}
+      ${circulos}
+      ${etiquetasX}
+    </svg>
+  `;
+}
+
+function renderGraficoProgreso(entrada) {
+  const puntos = entrada.puntos;
+  const mejorMarca = Math.max(...puntos.map((p) => p.pesoMax));
+  const mejorFecha = puntos.find((p) => p.pesoMax === mejorMarca).fecha;
+
+  if (puntos.length < 2) {
+    contenedorProgreso.innerHTML = `
+      ${generarSvgProgreso(puntos, entrada.nombre)}
+      <p class="progreso-nota">Necesitás al menos 2 entrenamientos con este ejercicio para ver una tendencia. Por ahora hay ${puntos.length}.</p>
+    `;
+    return;
+  }
+
+  contenedorProgreso.innerHTML = `
+    ${generarSvgProgreso(puntos, entrada.nombre)}
+    <div class="progreso-resumen">
+      <div><strong>${mejorMarca} kg</strong><span>mejor marca (${formatearFechaISO(mejorFecha)})</span></div>
+      <div><strong>${puntos.length}</strong><span>sesiones registradas</span></div>
+    </div>
+  `;
+}
+
+async function renderProgresoView() {
+  const mapa = await obtenerDatosProgreso();
+  const entradas = [...mapa.entries()].sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
+
+  if (!entradas.length) {
+    selectEjercicioProgreso.innerHTML = "";
+    contenedorProgreso.innerHTML = "";
+    vacioProgreso.classList.remove("hidden");
+    return;
+  }
+  vacioProgreso.classList.add("hidden");
+
+  const seleccionPrevia = selectEjercicioProgreso.value;
+  selectEjercicioProgreso.innerHTML = entradas
+    .map(([clave, e]) => `<option value="${escapeHtml(clave)}">${escapeHtml(e.nombre)} (${e.puntos.length})</option>`)
+    .join("");
+
+  const claveAMostrar = entradas.some(([clave]) => clave === seleccionPrevia) ? seleccionPrevia : entradas[0][0];
+  selectEjercicioProgreso.value = claveAMostrar;
+  renderGraficoProgreso(mapa.get(claveAMostrar));
+}
+
+selectEjercicioProgreso.addEventListener("change", async () => {
+  const mapa = await obtenerDatosProgreso();
+  const entrada = mapa.get(selectEjercicioProgreso.value);
+  if (entrada) renderGraficoProgreso(entrada);
 });
 
 // ============================================================

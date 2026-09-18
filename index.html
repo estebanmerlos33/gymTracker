@@ -30,6 +30,7 @@
       </div>
 
       <div class="actions-row">
+        <button id="btn-progreso" class="ghost">Progreso</button>
         <button id="btn-plantillas" class="ghost">Plantillas</button>
         <button id="btn-export" class="ghost">Exportar</button>
         <label class="ghost file-label">
@@ -117,6 +118,24 @@
 
     <div id="lista-plantillas"></div>
     <p id="vacio-plantillas" class="vacio hidden">Todavía no creaste ninguna plantilla.</p>
+  </section>
+
+  <!-- ---------- Vista: progreso por ejercicio ---------- -->
+  <section id="view-progreso" class="view hidden">
+    <button id="btn-volver-progreso" class="ghost btn-volver">‹ Volver</button>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Progreso por ejercicio</h2>
+      </div>
+      <label>
+        Ejercicio
+        <select id="select-ejercicio-progreso"></select>
+      </label>
+    </section>
+
+    <section class="card" id="contenedor-progreso"></section>
+    <p id="vacio-progreso" class="vacio hidden">Todavía no registraste series con peso para ningún ejercicio.</p>
   </section>
 
 </main>
