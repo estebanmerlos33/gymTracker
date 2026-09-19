@@ -562,3 +562,89 @@ button:active { transform: scale(0.98); }
   margin: 14px 0 0;
   text-align: center;
 }
+
+/* ---------- Resumen general, balance por tipo, récords ---------- */
+
+.progreso-resumen {
+  flex-wrap: wrap;
+  row-gap: 14px;
+}
+
+.balance-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.balance-fila:last-child { margin-bottom: 0; }
+
+.balance-etiqueta {
+  flex: none;
+  width: 84px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.balance-barra-fondo {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-2);
+  border-radius: 6px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.balance-barra {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 6px;
+}
+
+.balance-cantidad {
+  flex: none;
+  width: 20px;
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.lista-records {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lista-records li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--surface-2);
+  font-size: 0.85rem;
+}
+
+.lista-records li:last-child { border-bottom: none; }
+
+.lista-records li > span:first-child {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lista-records li > span:last-child {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.record-peso {
+  color: var(--accent);
+  font-weight: 600;
+}

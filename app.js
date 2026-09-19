@@ -798,16 +798,13 @@ const selectEjercicioProgreso = document.getElementById("select-ejercicio-progre
 const contenedorProgreso = document.getElementById("contenedor-progreso");
 const vacioProgreso = document.getElementById("vacio-progreso");
 
-// Recorre todos los entrenamientos y agrupa las series CON PESO por ejercicio,
-// usando el nombre normalizado como clave para juntar variantes de mayúsculas/tildes/espacios.
-async function obtenerDatosProgreso() {
-  const entrenamientos = (await obtenerEntrenamientos())
-    .slice()
-    .sort((a, b) => a.fecha.localeCompare(b.fecha)); // ascendente: mas viejo primero
-
+// Agrupa las series CON PESO por ejercicio, usando el nombre normalizado como clave
+// para juntar variantes de mayúsculas/tildes/espacios. Recibe los entrenamientos ya
+// ordenados de forma ascendente (mas viejo primero).
+function construirMapaProgreso(entrenamientosAsc) {
   const mapa = new Map(); // clave normalizada -> { nombre, puntos: [{fecha, pesoMax}] }
 
-  for (const entrenamiento of entrenamientos) {
+  for (const entrenamiento of entrenamientosAsc) {
     for (const ejercicio of entrenamiento.ejercicios) {
       if (!ejercicio.series.length) continue;
       const pesos = ejercicio.series.map((s) => s.peso).filter((p) => !isNaN(p));
@@ -817,12 +814,111 @@ async function obtenerDatosProgreso() {
       const clave = normalizarNombre(ejercicio.nombre);
       if (!mapa.has(clave)) mapa.set(clave, { nombre: ejercicio.nombre, puntos: [] });
       const entrada = mapa.get(clave);
-      entrada.nombre = ejercicio.nombre; // se queda con el nombre mas reciente (ultima iteracion, orden ascendente)
+      entrada.nombre = ejercicio.nombre;
       entrada.puntos.push({ fecha: entrenamiento.fecha, pesoMax });
     }
   }
 
   return mapa;
+}
+
+async function obtenerDatosProgreso() {
+  const entrenamientosAsc = (await obtenerEntrenamientos()).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+  return construirMapaProgreso(entrenamientosAsc);
+}
+
+// ---------- Estadísticas de baja complejidad: resumen, balance por tipo, récords ----------
+
+// Clave = fecha (lunes) de la semana a la que pertenece una fecha dada, usada para
+// agrupar entrenamientos por semana sin necesitar el algoritmo completo de semana ISO.
+function claveSemana(fechaISO) {
+  const d = new Date(fechaISO + "T00:00:00");
+  const diasDesdeElLunes = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - diasDesdeElLunes);
+  return d.toISOString().slice(0, 10);
+}
+
+function calcularRachaSemanas(entrenamientos) {
+  if (!entrenamientos.length) return 0;
+  const semanas = [...new Set(entrenamientos.map((e) => claveSemana(e.fecha)))].sort().reverse();
+
+  let racha = 1;
+  let actual = new Date(semanas[0] + "T00:00:00");
+  for (let i = 1; i < semanas.length; i++) {
+    const esperada = new Date(actual);
+    esperada.setDate(esperada.getDate() - 7);
+    const esperadaISO = esperada.toISOString().slice(0, 10);
+    if (semanas[i] === esperadaISO) {
+      racha++;
+      actual = esperada;
+    } else {
+      break;
+    }
+  }
+  return racha;
+}
+
+function renderResumenGeneral(entrenamientos) {
+  const totalEntrenamientos = entrenamientos.length;
+  const totalSeries = entrenamientos.reduce((acc, e) => acc + e.ejercicios.reduce((a, ej) => a + ej.series.length, 0), 0);
+  const volumenTotal = entrenamientos.reduce((acc, e) => acc + e.ejercicios.reduce((a, ej) =>
+    a + ej.series.reduce((s, serie) => s + (serie.peso || 0) * (serie.reps || 0), 0), 0), 0);
+  const racha = calcularRachaSemanas(entrenamientos);
+
+  document.getElementById("resumen-general-contenido").innerHTML = `
+    <div class="progreso-resumen">
+      <div><strong>${totalEntrenamientos}</strong><span>entrenamientos</span></div>
+      <div><strong>${totalSeries}</strong><span>series totales</span></div>
+      <div><strong>${Math.round(volumenTotal).toLocaleString("es-AR")} kg</strong><span>volumen total</span></div>
+      <div><strong>${racha}</strong><span>semana${racha !== 1 ? "s" : ""} seguida${racha !== 1 ? "s" : ""}</span></div>
+    </div>
+  `;
+}
+
+function renderBalanceTipo(entrenamientos) {
+  const conteo = new Map();
+  entrenamientos.forEach((e) => {
+    const tipo = e.tipo && e.tipo.trim() ? e.tipo.trim() : "Sin tipo";
+    conteo.set(tipo, (conteo.get(tipo) || 0) + 1);
+  });
+
+  const contenedor = document.getElementById("balance-tipo-contenido");
+  if (!conteo.size) {
+    contenedor.innerHTML = `<p class="progreso-nota">Todavía no hay entrenamientos.</p>`;
+    return;
+  }
+
+  const filas = [...conteo.entries()].sort((a, b) => b[1] - a[1]);
+  const maximo = filas[0][1];
+
+  contenedor.innerHTML = filas.map(([tipo, cantidad]) => `
+    <div class="balance-fila">
+      <span class="balance-etiqueta">${escapeHtml(tipo)}</span>
+      <div class="balance-barra-fondo"><div class="balance-barra" style="width:${(cantidad / maximo) * 100}%"></div></div>
+      <span class="balance-cantidad">${cantidad}</span>
+    </div>
+  `).join("");
+}
+
+function renderRecords(mapaProgreso) {
+  const contenedor = document.getElementById("records-contenido");
+  const entradas = [...mapaProgreso.entries()].sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
+
+  if (!entradas.length) {
+    contenedor.innerHTML = `<li class="serie-vacia">Todavía no hay series con peso registradas.</li>`;
+    return;
+  }
+
+  contenedor.innerHTML = entradas.map(([, entrada]) => {
+    const mejorMarca = Math.max(...entrada.puntos.map((p) => p.pesoMax));
+    const fecha = entrada.puntos.find((p) => p.pesoMax === mejorMarca).fecha;
+    return `
+      <li>
+        <span>${escapeHtml(entrada.nombre)}</span>
+        <span><span class="record-peso">${mejorMarca} kg</span> · ${formatearFechaISO(fecha)}</span>
+      </li>
+    `;
+  }).join("");
 }
 
 function generarSvgProgreso(puntos, nombreEjercicio) {
@@ -904,7 +1000,14 @@ function renderGraficoProgreso(entrada) {
 }
 
 async function renderProgresoView() {
-  const mapa = await obtenerDatosProgreso();
+  const entrenamientos = await obtenerEntrenamientos();
+  const entrenamientosAsc = entrenamientos.slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const mapa = construirMapaProgreso(entrenamientosAsc);
+
+  renderResumenGeneral(entrenamientos);
+  renderBalanceTipo(entrenamientos);
+  renderRecords(mapa);
+
   const entradas = [...mapa.entries()].sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
 
   if (!entradas.length) {
