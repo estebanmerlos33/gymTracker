@@ -165,6 +165,16 @@ async function reemplazarTodo(entrenamientos) {
   });
 }
 
+async function vaciarEntrenamientos() {
+  const db = await abrirDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // ---------- Plantillas ----------
 
 async function obtenerPlantillas() {
@@ -359,10 +369,12 @@ const formNuevoWrap = document.getElementById("form-nuevo-wrap");
 const fechaNuevo = document.getElementById("fecha-nuevo");
 const tipoNuevo = document.getElementById("tipo-nuevo");
 const plantillaNuevo = document.getElementById("plantilla-nuevo");
+const zonaPeligro = document.getElementById("zona-peligro");
 
 async function renderLista() {
   const entrenamientos = await obtenerEntrenamientos();
   vacio.style.display = entrenamientos.length ? "none" : "block";
+  zonaPeligro.classList.toggle("hidden", entrenamientos.length === 0);
 
   listaEntrenamientos.innerHTML = entrenamientos.map((e) => {
     const totalSeries = e.ejercicios.reduce((acc, ej) => acc + ej.series.length, 0);
@@ -1038,8 +1050,7 @@ selectEjercicioProgreso.addEventListener("change", async () => {
 // Exportar / Importar
 // ============================================================
 
-document.getElementById("btn-export").addEventListener("click", async () => {
-  const entrenamientos = await obtenerEntrenamientos();
+function descargarEntrenamientosComoJSON(entrenamientos) {
   const blob = new Blob([JSON.stringify(entrenamientos, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1047,6 +1058,11 @@ document.getElementById("btn-export").addEventListener("click", async () => {
   a.download = `entrenamientos-${hoyISO()}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+document.getElementById("btn-export").addEventListener("click", async () => {
+  const entrenamientos = await obtenerEntrenamientos();
+  descargarEntrenamientosComoJSON(entrenamientos);
 });
 
 document.getElementById("input-import").addEventListener("change", async (e) => {
@@ -1063,6 +1079,44 @@ document.getElementById("input-import").addEventListener("change", async (e) => 
     alert("No se pudo leer el archivo. ¿Es un export válido de esta app?");
   }
   e.target.value = "";
+});
+
+// ---------- Vaciar historial completo ----------
+
+const btnVaciarHistorial = document.getElementById("btn-vaciar-historial");
+const panelVaciarHistorial = document.getElementById("panel-vaciar-historial");
+const vaciarAviso = document.getElementById("vaciar-aviso");
+const checkExportarAntes = document.getElementById("check-exportar-antes");
+
+btnVaciarHistorial.addEventListener("click", async () => {
+  const entrenamientos = await obtenerEntrenamientos();
+  if (!entrenamientos.length) return;
+  vaciarAviso.textContent = `Esto va a borrar los ${entrenamientos.length} entrenamientos guardados. No se puede deshacer.`;
+  checkExportarAntes.checked = true;
+  panelVaciarHistorial.classList.remove("hidden");
+  btnVaciarHistorial.classList.add("hidden");
+});
+
+document.getElementById("btn-cancelar-vaciar").addEventListener("click", () => {
+  panelVaciarHistorial.classList.add("hidden");
+  btnVaciarHistorial.classList.remove("hidden");
+});
+
+document.getElementById("btn-confirmar-vaciar").addEventListener("click", async () => {
+  const entrenamientos = await obtenerEntrenamientos();
+  const exportarAntes = checkExportarAntes.checked;
+
+  if (exportarAntes) {
+    descargarEntrenamientosComoJSON(entrenamientos);
+    // pequeña espera para darle tiempo al navegador a disparar la descarga antes de vaciar
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  await vaciarEntrenamientos();
+  panelVaciarHistorial.classList.add("hidden");
+  btnVaciarHistorial.classList.remove("hidden");
+  await renderLista();
+  alert(exportarAntes ? "Historial vaciado. Se descargó una copia de seguridad." : "Historial vaciado.");
 });
 
 // ============================================================
