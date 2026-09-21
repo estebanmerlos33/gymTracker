@@ -63,26 +63,26 @@
       <datalist id="tipos-sugeridos"></datalist>
 
       <button id="btn-nuevo" class="btn-nuevo">+ Nuevo entrenamiento</button>
+
+      <div id="zona-peligro" class="zona-peligro hidden">
+        <button id="btn-vaciar-historial" class="link-peligro">Vaciar historial completo</button>
+
+        <div id="panel-vaciar-historial" class="panel-peligro hidden">
+          <p id="vaciar-aviso"></p>
+          <label class="checkbox-label">
+            <input type="checkbox" id="check-exportar-antes" checked>
+            Descargar una copia de seguridad antes de vaciar
+          </label>
+          <div class="form-actions">
+            <button id="btn-confirmar-vaciar" class="btn-peligro">Vaciar historial</button>
+            <button id="btn-cancelar-vaciar" class="ghost" type="button">Cancelar</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <ul id="lista-entrenamientos" class="lista-entrenamientos"></ul>
     <p id="vacio" class="vacio">Todavía no registraste ningún entrenamiento.</p>
-
-    <div id="zona-peligro" class="zona-peligro hidden">
-      <button id="btn-vaciar-historial" class="link-peligro">Vaciar historial completo</button>
-
-      <div id="panel-vaciar-historial" class="panel-peligro hidden">
-        <p id="vaciar-aviso"></p>
-        <label class="checkbox-label">
-          <input type="checkbox" id="check-exportar-antes" checked>
-          Descargar una copia de seguridad antes de vaciar
-        </label>
-        <div class="form-actions">
-          <button id="btn-confirmar-vaciar" class="btn-peligro">Vaciar historial</button>
-          <button id="btn-cancelar-vaciar" class="ghost" type="button">Cancelar</button>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- ---------- Vista: detalle de un entrenamiento ---------- -->
