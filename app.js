@@ -336,11 +336,9 @@ function irALista() {
   renderLista();
 }
 
-async function irADetalle(id, colapsarTodoAlEntrar = false) {
+async function irADetalle(id) {
   entrenamientoActual = await obtenerEntrenamiento(id);
-  colapsados = colapsarTodoAlEntrar
-    ? new Set(entrenamientoActual.ejercicios.map((ej) => ej.id))
-    : new Set();
+  colapsados = new Set(entrenamientoActual.ejercicios.map((ej) => ej.id));
   ocultarTodasLasVistas();
   viewDetalle.classList.remove("hidden");
   renderDetalle();
@@ -434,7 +432,7 @@ document.getElementById("btn-crear-entrenamiento").addEventListener("click", asy
   const id = await crearEntrenamiento(fechaNuevo.value, tipoNuevo.value.trim(), ejercicios);
   formNuevoWrap.classList.add("hidden");
   btnNuevo.classList.remove("hidden");
-  await irADetalle(id, true);
+  await irADetalle(id);
 });
 
 listaEntrenamientos.addEventListener("click", (e) => {
@@ -458,13 +456,23 @@ const tipoEntrenamiento = document.getElementById("tipo-entrenamiento");
 const listaEjercicios = document.getElementById("lista-ejercicios");
 
 function templateSerie(ejercicioId, serie) {
-  const duracionTexto = serie.duracion ? ` · ${serie.duracion}s` : "";
+  const partes = [];
+  if (serie.peso != null && serie.reps != null) {
+    partes.push(`${serie.peso} kg × ${serie.reps} reps`);
+  } else if (serie.peso != null) {
+    partes.push(`${serie.peso} kg`);
+  } else if (serie.reps != null) {
+    partes.push(`${serie.reps} reps`);
+  }
+  if (serie.duracion) partes.push(`${serie.duracion}s`);
+  const detalle = partes.join(" · ") || "Serie registrada";
+
   const pill = serie.sensacion
     ? `<span class="sensacion-pill sensacion-${serie.sensacion}">${SENSACION_LABEL[serie.sensacion]}</span>`
     : "";
   return `
     <li>
-      <span class="serie-detalle">${serie.peso} kg × ${serie.reps} reps${duracionTexto}</span>
+      <span class="serie-detalle">${detalle}</span>
       ${pill}
       <button class="btn-borrar-serie" data-ejercicio-id="${ejercicioId}" data-serie-id="${serie.id}" title="Borrar serie">×</button>
     </li>
@@ -497,8 +505,8 @@ function templateEjercicio(ej, index, total) {
 
         <form class="form-serie" data-ejercicio-id="${ej.id}">
           <div class="row">
-            <input type="number" class="input-peso" placeholder="kg" step="0.5" min="0" required>
-            <input type="number" class="input-reps" placeholder="reps" min="1" required>
+            <input type="number" class="input-peso" placeholder="kg (opcional)" step="0.5" min="0">
+            <input type="number" class="input-reps" placeholder="reps (opcional)" min="1">
           </div>
           <input type="number" class="input-duracion" placeholder="Duración (seg, opcional)" min="0" step="1">
           <select class="input-sensacion">
@@ -606,11 +614,18 @@ listaEjercicios.addEventListener("submit", async (e) => {
 
   const form = e.target;
   const ejercicioId = form.dataset.ejercicioId;
-  const peso = parseFloat(form.querySelector(".input-peso").value);
-  const reps = parseInt(form.querySelector(".input-reps").value, 10);
+  const pesoValor = form.querySelector(".input-peso").value;
+  const repsValor = form.querySelector(".input-reps").value;
   const duracionValor = form.querySelector(".input-duracion").value;
+  const peso = pesoValor ? parseFloat(pesoValor) : null;
+  const reps = repsValor ? parseInt(repsValor, 10) : null;
   const duracion = duracionValor ? parseInt(duracionValor, 10) : null;
   const sensacion = form.querySelector(".input-sensacion").value;
+
+  if (peso === null && reps === null && duracion === null) {
+    alert("Cargá al menos peso, repeticiones o duración.");
+    return;
+  }
 
   const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === ejercicioId);
   ejercicio.series.push({ id: uid(), peso, reps, duracion, sensacion });
@@ -819,7 +834,7 @@ function construirMapaProgreso(entrenamientosAsc) {
   for (const entrenamiento of entrenamientosAsc) {
     for (const ejercicio of entrenamiento.ejercicios) {
       if (!ejercicio.series.length) continue;
-      const pesos = ejercicio.series.map((s) => s.peso).filter((p) => !isNaN(p));
+      const pesos = ejercicio.series.map((s) => s.peso).filter((p) => p !== null && p !== undefined && !isNaN(p));
       if (!pesos.length) continue;
       const pesoMax = Math.max(...pesos);
 
