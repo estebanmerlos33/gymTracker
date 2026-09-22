@@ -283,6 +283,13 @@ function formatearFechaISO(iso) {
   return `${d}/${m}/${y}`;
 }
 
+const DIAS_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+function formatearFechaConDia(iso) {
+  const dia = DIAS_SEMANA[new Date(iso + "T00:00:00").getDay()];
+  return `${formatearFechaISO(iso)} - ${dia}`;
+}
+
 // Normaliza un nombre de ejercicio para AGRUPAR (comparar), sin cambiar cómo se muestra:
 // minúsculas, sin tildes, sin espacios de más.
 function normalizarNombre(str) {
@@ -380,7 +387,7 @@ async function renderLista() {
     return `
       <li data-id="${e.id}">
         <div>
-          <div class="entrenamiento-fecha">${formatearFechaISO(e.fecha)}${tipoBadge}</div>
+          <div class="entrenamiento-fecha">${formatearFechaConDia(e.fecha)}${tipoBadge}</div>
           <div class="entrenamiento-resumen">
             ${e.ejercicios.length} ejercicio${e.ejercicios.length !== 1 ? "s" : ""}
             · ${totalSeries} serie${totalSeries !== 1 ? "s" : ""}
@@ -531,7 +538,7 @@ function renderEjercicios() {
 }
 
 async function renderDetalle() {
-  detalleFecha.textContent = formatearFechaISO(entrenamientoActual.fecha);
+  detalleFecha.textContent = formatearFechaConDia(entrenamientoActual.fecha);
   tipoEntrenamiento.value = entrenamientoActual.tipo || "";
   renderEjercicios();
   await actualizarDatalistSugeridos();

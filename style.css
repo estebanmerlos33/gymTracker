@@ -264,6 +264,8 @@ button:active { transform: scale(0.98); }
   font-size: 1.1rem;
   color: var(--text);
   font-weight: 600;
+  flex: 1;
+  min-width: 0;
 }
 
 .input-tipo-entrenamiento {
