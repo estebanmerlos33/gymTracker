@@ -319,14 +319,14 @@ button:active { transform: scale(0.98); }
 .ejercicio-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .btn-toggle-icono {
   flex: none;
   background: none;
   border: none;
-  padding: 6px 4px;
+  padding: 6px 6px;
   color: var(--text-dim);
   cursor: pointer;
   display: flex;
@@ -337,16 +337,16 @@ button:active { transform: scale(0.98); }
   display: flex;
   flex-direction: column;
   flex: none;
-  gap: 2px;
+  gap: 5px;
 }
 
 .btn-orden {
   background: none;
   border: none;
   color: var(--text-dim);
-  font-size: 0.6rem;
+  font-size: 0.68rem;
   line-height: 1;
-  padding: 2px 5px;
+  padding: 5px 8px;
   cursor: pointer;
 }
 
@@ -376,7 +376,11 @@ button:active { transform: scale(0.98); }
 }
 
 .toggle-icono {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.ejercicio-head .btn-borrar-ejercicio {
+  margin-left: 4px;
 }
 
 .ejercicio-resumen {
