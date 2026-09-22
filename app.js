@@ -287,7 +287,8 @@ const DIAS_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "vier
 
 function formatearFechaConDia(iso) {
   const dia = DIAS_SEMANA[new Date(iso + "T00:00:00").getDay()];
-  return `${formatearFechaISO(iso)} - ${dia}`;
+  const diaCapitalizado = dia.charAt(0).toUpperCase() + dia.slice(1);
+  return `${formatearFechaISO(iso)} - ${diaCapitalizado}`;
 }
 
 // Normaliza un nombre de ejercicio para AGRUPAR (comparar), sin cambiar cómo se muestra:
