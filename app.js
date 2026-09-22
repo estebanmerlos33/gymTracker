@@ -285,10 +285,13 @@ function formatearFechaISO(iso) {
 
 const DIAS_SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 
-function formatearFechaConDia(iso) {
+function nombreDiaSemana(iso) {
   const dia = DIAS_SEMANA[new Date(iso + "T00:00:00").getDay()];
-  const diaCapitalizado = dia.charAt(0).toUpperCase() + dia.slice(1);
-  return `${formatearFechaISO(iso)} - ${diaCapitalizado}`;
+  return dia.charAt(0).toUpperCase() + dia.slice(1);
+}
+
+function formatearFechaConDia(iso) {
+  return `${formatearFechaISO(iso)} - ${nombreDiaSemana(iso)}`;
 }
 
 // Normaliza un nombre de ejercicio para AGRUPAR (comparar), sin cambiar cómo se muestra:
@@ -459,7 +462,8 @@ document.getElementById("btn-volver-progreso").addEventListener("click", irAList
 // Vista: detalle de un entrenamiento
 // ============================================================
 
-const detalleFecha = document.getElementById("detalle-fecha");
+const fechaEntrenamiento = document.getElementById("fecha-entrenamiento");
+const detalleDiaSemana = document.getElementById("detalle-dia-semana");
 const tipoEntrenamiento = document.getElementById("tipo-entrenamiento");
 const listaEjercicios = document.getElementById("lista-ejercicios");
 
@@ -539,7 +543,8 @@ function renderEjercicios() {
 }
 
 async function renderDetalle() {
-  detalleFecha.textContent = formatearFechaConDia(entrenamientoActual.fecha);
+  fechaEntrenamiento.value = entrenamientoActual.fecha;
+  detalleDiaSemana.textContent = nombreDiaSemana(entrenamientoActual.fecha);
   tipoEntrenamiento.value = entrenamientoActual.tipo || "";
   renderEjercicios();
   await actualizarDatalistSugeridos();
@@ -575,6 +580,16 @@ tipoEntrenamiento.addEventListener("change", async () => {
 
 tipoEntrenamiento.addEventListener("keydown", (e) => {
   if (e.key === "Enter") tipoEntrenamiento.blur();
+});
+
+fechaEntrenamiento.addEventListener("change", async () => {
+  if (!fechaEntrenamiento.value) {
+    fechaEntrenamiento.value = entrenamientoActual.fecha; // no se permite dejarla vacía
+    return;
+  }
+  entrenamientoActual.fecha = fechaEntrenamiento.value;
+  detalleDiaSemana.textContent = nombreDiaSemana(entrenamientoActual.fecha);
+  await guardarEntrenamiento(entrenamientoActual);
 });
 
 listaEjercicios.addEventListener("click", async (e) => {

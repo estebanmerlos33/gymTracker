@@ -91,7 +91,10 @@
 
     <section class="card detalle-header">
       <div class="detalle-header-top">
-        <h2 id="detalle-fecha"></h2>
+        <div class="detalle-fecha-grupo">
+          <input type="date" id="fecha-entrenamiento" class="input-fecha-entrenamiento" aria-label="Fecha del entrenamiento">
+          <span id="detalle-dia-semana" class="detalle-dia-semana"></span>
+        </div>
         <button id="btn-borrar-entrenamiento" class="btn-x" title="Borrar entrenamiento" aria-label="Borrar entrenamiento">✕</button>
       </div>
       <input type="text" id="tipo-entrenamiento" class="input-tipo-entrenamiento" placeholder="Tipo de entrenamiento (opcional)" list="tipos-sugeridos" autocomplete="off">
