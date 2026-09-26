@@ -110,6 +110,8 @@ label {
 
 .row { display: flex; gap: 12px; }
 
+.row-serie { gap: 8px; }
+
 input, select {
   width: 100%;
   min-width: 0;

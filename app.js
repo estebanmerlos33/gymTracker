@@ -516,11 +516,11 @@ function templateEjercicio(ej, index, total) {
         </ul>
 
         <form class="form-serie" data-ejercicio-id="${ej.id}">
-          <div class="row">
-            <input type="number" class="input-peso" placeholder="kg (opcional)" step="0.5" min="0">
-            <input type="number" class="input-reps" placeholder="reps (opcional)" min="1">
+          <div class="row row-serie">
+            <input type="number" class="input-peso" placeholder="kg" step="0.5" min="0">
+            <input type="number" class="input-reps" placeholder="reps" min="1">
+            <input type="number" class="input-duracion" placeholder="seg" min="0" step="1">
           </div>
-          <input type="number" class="input-duracion" placeholder="Duración (seg, opcional)" min="0" step="1">
           <select class="input-sensacion">
             <option value="">Sensación (opcional)</option>
             <option value="facil">Fácil</option>
