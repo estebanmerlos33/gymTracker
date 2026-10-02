@@ -326,6 +326,7 @@ async function actualizarDatalistSugeridos() {
 
 let entrenamientoActual = null;
 let colapsados = new Set();
+let colapsadosPlantillas = new Set();
 let plantillasCache = [];
 
 const viewLista = document.getElementById("view-lista");
@@ -340,32 +341,59 @@ function ocultarTodasLasVistas() {
   viewProgreso.classList.add("hidden");
 }
 
-function irALista() {
+function pushEstado(vista, datos = {}) {
+  history.pushState({ vista, ...datos }, "", "");
+}
+
+function irALista(pushear = true) {
   entrenamientoActual = null;
   ocultarTodasLasVistas();
   viewLista.classList.remove("hidden");
   renderLista();
+  if (pushear) pushEstado("lista");
 }
 
-async function irADetalle(id) {
+async function irADetalle(id, pushear = true) {
   entrenamientoActual = await obtenerEntrenamiento(id);
   colapsados = new Set(entrenamientoActual.ejercicios.map((ej) => ej.id));
   ocultarTodasLasVistas();
   viewDetalle.classList.remove("hidden");
-  renderDetalle();
+  await renderDetalle();
+  if (pushear) pushEstado("detalle", { id });
 }
 
-async function irAPlantillas() {
+async function irAPlantillas(pushear = true) {
   ocultarTodasLasVistas();
   viewPlantillas.classList.remove("hidden");
-  await renderPlantillasView();
+  await renderPlantillasView(true); // true = colapsar todas al entrar
+  if (pushear) pushEstado("plantillas");
 }
 
-async function irAProgreso() {
+async function irAProgreso(pushear = true) {
   ocultarTodasLasVistas();
   viewProgreso.classList.remove("hidden");
   await renderProgresoView();
+  if (pushear) pushEstado("progreso");
 }
+
+// Integración con el botón/gesto de "atrás" del sistema operativo: en vez de que
+// nos saque de la app, navega entre nuestras propias vistas usando el historial
+// del navegador. El estado inicial ("lista") se fija con replaceState para que
+// haya siempre algo a donde "volver" cuando se empuja una vista nueva.
+history.replaceState({ vista: "lista" }, "", "");
+
+window.addEventListener("popstate", (e) => {
+  const estado = e.state;
+  if (!estado || estado.vista === "lista") {
+    irALista(false);
+  } else if (estado.vista === "detalle") {
+    irADetalle(estado.id, false);
+  } else if (estado.vista === "plantillas") {
+    irAPlantillas(false);
+  } else if (estado.vista === "progreso") {
+    irAProgreso(false);
+  }
+});
 
 // ============================================================
 // Vista: lista de entrenamientos
@@ -452,11 +480,11 @@ listaEntrenamientos.addEventListener("click", (e) => {
   }
 });
 
-document.getElementById("btn-volver").addEventListener("click", irALista);
-document.getElementById("btn-plantillas").addEventListener("click", irAPlantillas);
-document.getElementById("btn-volver-plantillas").addEventListener("click", irALista);
-document.getElementById("btn-progreso").addEventListener("click", irAProgreso);
-document.getElementById("btn-volver-progreso").addEventListener("click", irALista);
+document.getElementById("btn-volver").addEventListener("click", () => history.back());
+document.getElementById("btn-plantillas").addEventListener("click", () => irAPlantillas());
+document.getElementById("btn-volver-plantillas").addEventListener("click", () => history.back());
+document.getElementById("btn-progreso").addEventListener("click", () => irAProgreso());
+document.getElementById("btn-volver-progreso").addEventListener("click", () => history.back());
 
 // ============================================================
 // Vista: detalle de un entrenamiento
@@ -569,7 +597,7 @@ document.getElementById("form-ejercicio").addEventListener("submit", async (e) =
 document.getElementById("btn-borrar-entrenamiento").addEventListener("click", async () => {
   if (!confirm("¿Borrar este entrenamiento completo? No se puede deshacer.")) return;
   await borrarEntrenamiento(entrenamientoActual.id);
-  irALista();
+  history.back();
 });
 
 tipoEntrenamiento.addEventListener("change", async () => {
@@ -686,36 +714,48 @@ const formNuevaPlantillaWrap = document.getElementById("form-nueva-plantilla-wra
 const nombreNuevaPlantilla = document.getElementById("nombre-nueva-plantilla");
 
 function templatePlantilla(pl) {
+  const colapsado = colapsadosPlantillas.has(pl.id);
+  const totalEjercicios = pl.ejercicios.length;
+
   return `
     <section class="card plantilla-card" data-plantilla-id="${pl.id}">
       <div class="plantilla-head">
+        <button type="button" class="btn-toggle-icono" data-plantilla-id="${pl.id}" aria-expanded="${!colapsado}" title="${colapsado ? "Expandir" : "Colapsar"}">
+          <span class="toggle-icono">${colapsado ? "▸" : "▾"}</span>
+        </button>
         <input type="text" class="input-nombre-plantilla" value="${escapeHtml(pl.nombre)}" data-plantilla-id="${pl.id}" aria-label="Nombre de la plantilla">
+        ${colapsado ? `<span class="ejercicio-resumen">${totalEjercicios} ejercicio${totalEjercicios !== 1 ? "s" : ""}</span>` : ""}
         <button class="btn-x btn-borrar-plantilla" data-plantilla-id="${pl.id}" title="Borrar plantilla" aria-label="Borrar plantilla">✕</button>
       </div>
 
-      <ul class="lista-ejercicios-plantilla">
-        ${pl.ejercicios.map((e, index) => `
-          <li class="ejercicio-plantilla-item" data-id="${e.id}">
-            <input type="text" class="input-nombre-ejercicio-plantilla" value="${escapeHtml(e.nombre)}" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" aria-label="Nombre del ejercicio">
-            <div class="btn-orden-grupo">
-              <button class="btn-orden btn-subir-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Subir" aria-label="Subir ejercicio" ${index === 0 ? "disabled" : ""}>▲</button>
-              <button class="btn-orden btn-bajar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Bajar" aria-label="Bajar ejercicio" ${index === pl.ejercicios.length - 1 ? "disabled" : ""}>▼</button>
-            </div>
-            <button class="btn-borrar-serie btn-quitar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Quitar ejercicio">×</button>
-          </li>
-        `).join("") || `<li class="serie-vacia">Sin ejercicios todavía.</li>`}
-      </ul>
+      <div class="ejercicio-contenido ${colapsado ? "hidden" : ""}">
+        <ul class="lista-ejercicios-plantilla">
+          ${pl.ejercicios.map((e, index) => `
+            <li class="ejercicio-plantilla-item" data-id="${e.id}">
+              <input type="text" class="input-nombre-ejercicio-plantilla" value="${escapeHtml(e.nombre)}" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" aria-label="Nombre del ejercicio">
+              <div class="btn-orden-grupo">
+                <button class="btn-orden btn-subir-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Subir" aria-label="Subir ejercicio" ${index === 0 ? "disabled" : ""}>▲</button>
+                <button class="btn-orden btn-bajar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Bajar" aria-label="Bajar ejercicio" ${index === pl.ejercicios.length - 1 ? "disabled" : ""}>▼</button>
+              </div>
+              <button class="btn-borrar-serie btn-quitar-ejercicio-plantilla" data-plantilla-id="${pl.id}" data-ejercicio-id="${e.id}" title="Quitar ejercicio">×</button>
+            </li>
+          `).join("") || `<li class="serie-vacia">Sin ejercicios todavía.</li>`}
+        </ul>
 
-      <form class="form-agregar-ejercicio-plantilla" data-plantilla-id="${pl.id}">
-        <input type="text" class="input-nuevo-ejercicio-plantilla" placeholder="Agregar ejercicio" list="ejercicios-sugeridos" autocomplete="off" required>
-        <button type="submit">+ Agregar</button>
-      </form>
+        <form class="form-agregar-ejercicio-plantilla" data-plantilla-id="${pl.id}">
+          <input type="text" class="input-nuevo-ejercicio-plantilla" placeholder="Agregar ejercicio" list="ejercicios-sugeridos" autocomplete="off" required>
+          <button type="submit">+ Agregar</button>
+        </form>
+      </div>
     </section>
   `;
 }
 
-async function renderPlantillasView() {
+async function renderPlantillasView(colapsarTodoAlEntrar = false) {
   plantillasCache = await obtenerPlantillas();
+  if (colapsarTodoAlEntrar) {
+    colapsadosPlantillas = new Set(plantillasCache.map((p) => p.id));
+  }
   vacioPlantillas.classList.toggle("hidden", plantillasCache.length > 0);
   listaPlantillas.innerHTML = plantillasCache.map(templatePlantilla).join("");
   await actualizarDatalistSugeridos();
@@ -785,6 +825,16 @@ listaPlantillas.addEventListener("keydown", (e) => {
 });
 
 listaPlantillas.addEventListener("click", async (e) => {
+  const btnToggle = e.target.closest(".btn-toggle-icono");
+  if (btnToggle) {
+    const id = Number(btnToggle.dataset.plantillaId);
+    if (colapsadosPlantillas.has(id)) colapsadosPlantillas.delete(id);
+    else colapsadosPlantillas.add(id);
+    const plantilla = plantillasCache.find((p) => p.id === id);
+    if (plantilla) reRenderPlantillaCard(plantilla);
+    return;
+  }
+
   if (e.target.matches(".btn-borrar-plantilla")) {
     const id = Number(e.target.dataset.plantillaId);
     if (!confirm("¿Borrar esta plantilla? No se puede deshacer.")) return;
@@ -848,24 +898,56 @@ const selectEjercicioProgreso = document.getElementById("select-ejercicio-progre
 const contenedorProgreso = document.getElementById("contenedor-progreso");
 const vacioProgreso = document.getElementById("vacio-progreso");
 
-// Agrupa las series CON PESO por ejercicio, usando el nombre normalizado como clave
-// para juntar variantes de mayúsculas/tildes/espacios. Recibe los entrenamientos ya
-// ordenados de forma ascendente (mas viejo primero).
+// Agrupa la serie "representativa" de cada sesión por ejercicio, usando el nombre
+// normalizado como clave para juntar variantes de mayúsculas/tildes/espacios.
+// Cada ejercicio se trackea por UNA sola métrica, elegida en este orden de prioridad:
+// peso (si alguna vez lo cargó) > reps (si nunca tuvo peso) > duración (si no tiene ninguno de los dos).
+// Así, ejercicios de peso corporal (Dominadas) o isométricos (Plancha) también aparecen.
 function construirMapaProgreso(entrenamientosAsc) {
-  const mapa = new Map(); // clave normalizada -> { nombre, puntos: [{fecha, pesoMax}] }
+  const CAMPOS = ["peso", "reps", "duracion"];
+  const UNIDADES = { peso: "kg", reps: "reps", duracion: "s" };
+
+  const tieneValor = (v) => v !== null && v !== undefined && !isNaN(v);
+
+  // Primera pasada: decidir la métrica de cada ejercicio mirando TODO su historial
+  const capacidades = new Map(); // clave -> { peso, reps, duracion } (booleanos)
+  for (const entrenamiento of entrenamientosAsc) {
+    for (const ejercicio of entrenamiento.ejercicios) {
+      const clave = normalizarNombre(ejercicio.nombre);
+      if (!capacidades.has(clave)) capacidades.set(clave, { peso: false, reps: false, duracion: false });
+      const cap = capacidades.get(clave);
+      for (const s of ejercicio.series) {
+        if (tieneValor(s.peso)) cap.peso = true;
+        if (tieneValor(s.reps)) cap.reps = true;
+        if (tieneValor(s.duracion)) cap.duracion = true;
+      }
+    }
+  }
+
+  const metricaDe = (clave) => {
+    const cap = capacidades.get(clave);
+    return CAMPOS.find((campo) => cap[campo]) || null;
+  };
+
+  // Segunda pasada: construir los puntos usando la métrica ya decidida por ejercicio
+  const mapa = new Map(); // clave -> { nombre, metrica, unidad, puntos: [{fecha, valor, entrenamientoId}] }
 
   for (const entrenamiento of entrenamientosAsc) {
     for (const ejercicio of entrenamiento.ejercicios) {
       if (!ejercicio.series.length) continue;
-      const pesos = ejercicio.series.map((s) => s.peso).filter((p) => p !== null && p !== undefined && !isNaN(p));
-      if (!pesos.length) continue;
-      const pesoMax = Math.max(...pesos);
-
       const clave = normalizarNombre(ejercicio.nombre);
-      if (!mapa.has(clave)) mapa.set(clave, { nombre: ejercicio.nombre, puntos: [] });
+      const metrica = metricaDe(clave);
+      if (!metrica) continue; // este ejercicio nunca tuvo peso, reps ni duración cargados
+
+      const valores = ejercicio.series.map((s) => s[metrica]).filter(tieneValor);
+      if (!valores.length) continue; // esta sesión puntual no cargó esa métrica en particular
+
+      const valorMax = Math.max(...valores);
+
+      if (!mapa.has(clave)) mapa.set(clave, { nombre: ejercicio.nombre, metrica, unidad: UNIDADES[metrica], puntos: [] });
       const entrada = mapa.get(clave);
       entrada.nombre = ejercicio.nombre;
-      entrada.puntos.push({ fecha: entrenamiento.fecha, pesoMax });
+      entrada.puntos.push({ fecha: entrenamiento.fecha, valor: valorMax, entrenamientoId: entrenamiento.id });
     }
   }
 
@@ -955,36 +1037,52 @@ function renderRecords(mapaProgreso) {
   const entradas = [...mapaProgreso.entries()].sort((a, b) => a[1].nombre.localeCompare(b[1].nombre));
 
   if (!entradas.length) {
-    contenedor.innerHTML = `<li class="serie-vacia">Todavía no hay series con peso registradas.</li>`;
+    contenedor.innerHTML = `<li class="serie-vacia">Todavía no hay series registradas.</li>`;
     return;
   }
 
   contenedor.innerHTML = entradas.map(([, entrada]) => {
-    const mejorMarca = Math.max(...entrada.puntos.map((p) => p.pesoMax));
-    const fecha = entrada.puntos.find((p) => p.pesoMax === mejorMarca).fecha;
+    const mejorMarca = Math.max(...entrada.puntos.map((p) => p.valor));
+    const punto = entrada.puntos.find((p) => p.valor === mejorMarca);
     return `
-      <li>
+      <li class="record-item" data-entrenamiento-id="${punto.entrenamientoId}" tabindex="0" role="button">
         <span>${escapeHtml(entrada.nombre)}</span>
-        <span><span class="record-peso">${mejorMarca} kg</span> · ${formatearFechaISO(fecha)}</span>
+        <span><span class="record-peso">${mejorMarca} ${entrada.unidad}</span> · ${formatearFechaISO(punto.fecha)}</span>
       </li>
     `;
   }).join("");
 }
 
-function generarSvgProgreso(puntos, nombreEjercicio) {
+document.getElementById("records-contenido").addEventListener("click", (e) => {
+  const li = e.target.closest(".record-item");
+  if (li) irADetalle(Number(li.dataset.entrenamientoId));
+});
+
+document.getElementById("records-contenido").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const li = e.target.closest(".record-item");
+  if (li) irADetalle(Number(li.dataset.entrenamientoId));
+});
+
+document.getElementById("contenedor-progreso").addEventListener("click", (e) => {
+  const btn = e.target.closest(".link-ir-entrenamiento");
+  if (btn) irADetalle(Number(btn.dataset.entrenamientoId));
+});
+
+function generarSvgProgreso(puntos, nombreEjercicio, unidad) {
   const W = 600, H = 260;
   const pad = { top: 20, right: 16, bottom: 34, left: 42 };
   const anchoUtil = W - pad.left - pad.right;
   const altoUtil = H - pad.top - pad.bottom;
 
-  const valores = puntos.map((p) => p.pesoMax);
+  const valores = puntos.map((p) => p.valor);
   const yMax = Math.max(...valores) * 1.15 || 10;
   const yMin = 0;
 
   const x = (i) => pad.left + (puntos.length > 1 ? (i / (puntos.length - 1)) * anchoUtil : anchoUtil / 2);
   const y = (v) => pad.top + altoUtil - ((v - yMin) / (yMax - yMin)) * altoUtil;
 
-  // Lineas de grilla horizontales + etiquetas del eje Y (peso)
+  // Lineas de grilla horizontales + etiquetas del eje Y
   const nLineas = 4;
   let grilla = "";
   for (let i = 0; i <= nLineas; i++) {
@@ -1003,11 +1101,11 @@ function generarSvgProgreso(puntos, nombreEjercicio) {
     etiquetasX += `<text class="progreso-etiqueta" x="${x(i)}" y="${H - pad.bottom + 16}" text-anchor="middle">${formatearFechaISO(p.fecha).slice(0, 5)}</text>`;
   });
 
-  const puntosLinea = puntos.map((p, i) => `${x(i)},${y(p.pesoMax)}`).join(" ");
+  const puntosLinea = puntos.map((p, i) => `${x(i)},${y(p.valor)}`).join(" ");
 
   const circulos = puntos.map((p, i) => `
-    <circle class="progreso-punto" cx="${x(i)}" cy="${y(p.pesoMax)}" r="4">
-      <title>${formatearFechaISO(p.fecha)} · ${p.pesoMax} kg</title>
+    <circle class="progreso-punto" cx="${x(i)}" cy="${y(p.valor)}" r="4">
+      <title>${formatearFechaISO(p.fecha)} · ${p.valor} ${unidad}</title>
     </circle>
   `).join("");
 
@@ -1029,23 +1127,24 @@ function generarSvgProgreso(puntos, nombreEjercicio) {
 
 function renderGraficoProgreso(entrada) {
   const puntos = entrada.puntos;
-  const mejorMarca = Math.max(...puntos.map((p) => p.pesoMax));
-  const mejorFecha = puntos.find((p) => p.pesoMax === mejorMarca).fecha;
+  const mejorMarca = Math.max(...puntos.map((p) => p.valor));
+  const puntoMejor = puntos.find((p) => p.valor === mejorMarca);
 
   if (puntos.length < 2) {
     contenedorProgreso.innerHTML = `
-      ${generarSvgProgreso(puntos, entrada.nombre)}
+      ${generarSvgProgreso(puntos, entrada.nombre, entrada.unidad)}
       <p class="progreso-nota">Necesitás al menos 2 entrenamientos con este ejercicio para ver una tendencia. Por ahora hay ${puntos.length}.</p>
     `;
     return;
   }
 
   contenedorProgreso.innerHTML = `
-    ${generarSvgProgreso(puntos, entrada.nombre)}
+    ${generarSvgProgreso(puntos, entrada.nombre, entrada.unidad)}
     <div class="progreso-resumen">
-      <div><strong>${mejorMarca} kg</strong><span>mejor marca (${formatearFechaISO(mejorFecha)})</span></div>
+      <div><strong>${mejorMarca} ${entrada.unidad}</strong><span>mejor marca (${formatearFechaISO(puntoMejor.fecha)})</span></div>
       <div><strong>${puntos.length}</strong><span>sesiones registradas</span></div>
     </div>
+    <button class="link-ir-entrenamiento" data-entrenamiento-id="${puntoMejor.entrenamientoId}">Ver ese entrenamiento ›</button>
   `;
 }
 

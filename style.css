@@ -316,6 +316,12 @@ button:active { transform: scale(0.98); }
 
 /* ---------- Tarjeta de ejercicio ---------- */
 
+#lista-ejercicios {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .ejercicio-card { display: flex; flex-direction: column; gap: 12px; }
 
 .ejercicio-head {
@@ -402,7 +408,7 @@ button:active { transform: scale(0.98); }
 .lista-series {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 14px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -602,6 +608,19 @@ button:active { transform: scale(0.98); }
   text-align: center;
 }
 
+.link-ir-entrenamiento {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 10px 0 0;
+  cursor: pointer;
+}
+
 /* ---------- Resumen general, balance por tipo, récords ---------- */
 
 .progreso-resumen {
@@ -666,6 +685,15 @@ button:active { transform: scale(0.98); }
   border-bottom: 1px solid var(--surface-2);
   font-size: 0.85rem;
 }
+
+.record-item {
+  cursor: pointer;
+  padding: 9px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+}
+
+.record-item:active { background: var(--surface-2); }
 
 .lista-records li:last-child { border-bottom: none; }
 
