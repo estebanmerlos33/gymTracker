@@ -557,7 +557,10 @@ function templateEjercicio(ej, index, total) {
             <option value="dificil">Difícil</option>
             <option value="extremo">Extremo</option>
           </select>
-          <button type="submit">+ Agregar serie</button>
+          <div class="form-serie-botones">
+            <button type="button" class="btn-repetir-serie" title="Cargar los datos de la última serie de este ejercicio" ${totalSeries === 0 ? "disabled" : ""}>Repetir última serie</button>
+            <button type="submit">+ Agregar serie</button>
+          </div>
         </form>
       </div>
     </section>
@@ -628,6 +631,19 @@ listaEjercicios.addEventListener("click", async (e) => {
     if (colapsados.has(id)) colapsados.delete(id);
     else colapsados.add(id);
     renderEjercicios();
+    return;
+  }
+
+  const btnRepetir = e.target.closest(".btn-repetir-serie");
+  if (btnRepetir) {
+    const form = btnRepetir.closest(".form-serie");
+    const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === form.dataset.ejercicioId);
+    const ultima = ejercicio && ejercicio.series[ejercicio.series.length - 1];
+    if (!ultima) return;
+    form.querySelector(".input-peso").value = ultima.peso ?? "";
+    form.querySelector(".input-reps").value = ultima.reps ?? "";
+    form.querySelector(".input-duracion").value = ultima.duracion ?? "";
+    form.querySelector(".input-sensacion").value = ultima.sensacion || "";
     return;
   }
 
