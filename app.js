@@ -198,11 +198,11 @@ async function obtenerPlantilla(id) {
   });
 }
 
-async function crearPlantilla(nombre) {
+async function crearPlantilla(nombre, ejercicios = []) {
   const db = await abrirDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PLANTILLAS, "readwrite");
-    const req = tx.objectStore(STORE_PLANTILLAS).add({ nombre, ejercicios: [] });
+    const req = tx.objectStore(STORE_PLANTILLAS).add({ nombre, ejercicios });
     req.onsuccess = () => resolve(req.result);
     tx.onerror = () => reject(tx.error);
   });
@@ -729,6 +729,8 @@ const vacioPlantillas = document.getElementById("vacio-plantillas");
 const btnNuevaPlantilla = document.getElementById("btn-nueva-plantilla");
 const formNuevaPlantillaWrap = document.getElementById("form-nueva-plantilla-wrap");
 const nombreNuevaPlantilla = document.getElementById("nombre-nueva-plantilla");
+const plantillaBaseNueva = document.getElementById("plantilla-base-nueva");
+let nombreSugeridoPlantilla = ""; // última sugerencia "<base> (copia)" puesta automáticamente en el nombre
 
 function templatePlantilla(pl) {
   const colapsado = colapsadosPlantillas.has(pl.id);
@@ -790,9 +792,21 @@ function reRenderPlantillaCard(plantilla) {
 
 btnNuevaPlantilla.addEventListener("click", () => {
   nombreNuevaPlantilla.value = "";
+  nombreSugeridoPlantilla = "";
+  plantillaBaseNueva.innerHTML = `<option value="">Sin base (vacía)</option>` +
+    plantillasCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join("");
   formNuevaPlantillaWrap.classList.remove("hidden");
   btnNuevaPlantilla.classList.add("hidden");
   nombreNuevaPlantilla.focus();
+});
+
+// Al elegir una base se sugiere "<nombre> (copia)", salvo que el usuario ya haya escrito otro nombre
+plantillaBaseNueva.addEventListener("change", () => {
+  const actual = nombreNuevaPlantilla.value.trim();
+  if (actual && actual !== nombreSugeridoPlantilla) return;
+  const base = plantillasCache.find((p) => p.id === Number(plantillaBaseNueva.value));
+  nombreSugeridoPlantilla = base ? `${base.nombre} (copia)` : "";
+  nombreNuevaPlantilla.value = nombreSugeridoPlantilla;
 });
 
 document.getElementById("btn-cancelar-nueva-plantilla").addEventListener("click", () => {
@@ -806,7 +820,12 @@ document.getElementById("btn-crear-plantilla").addEventListener("click", async (
     alert("Ingresá un nombre para la plantilla.");
     return;
   }
-  await crearPlantilla(nombre);
+  let ejercicios = [];
+  if (plantillaBaseNueva.value) {
+    const base = await obtenerPlantilla(Number(plantillaBaseNueva.value));
+    if (base) ejercicios = base.ejercicios.map((e) => ({ ...e, id: uid() }));
+  }
+  await crearPlantilla(nombre, ejercicios);
   formNuevaPlantillaWrap.classList.add("hidden");
   btnNuevaPlantilla.classList.remove("hidden");
   await renderPlantillasView();
