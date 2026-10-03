@@ -512,7 +512,7 @@ function templateSerie(ejercicioId, serie) {
     ? `<span class="sensacion-pill sensacion-${serie.sensacion}">${SENSACION_LABEL[serie.sensacion]}</span>`
     : "";
   return `
-    <li>
+    <li data-serie-id="${serie.id}">
       <span class="serie-detalle">${detalle}</span>
       ${pill}
       <button class="btn-borrar-serie" data-ejercicio-id="${ejercicioId}" data-serie-id="${serie.id}" title="Borrar serie">×</button>
@@ -589,6 +589,24 @@ async function persistirYRenderizar() {
   await renderDetalle();
 }
 
+// Despliega el ejercicio, lleva la vista a la serie indicada y la resalta unos instantes (animación en CSS)
+function mostrarSerieDestacada(ejercicioId, serieId) {
+  if (colapsados.has(ejercicioId)) {
+    colapsados.delete(ejercicioId);
+    renderEjercicios();
+  }
+  const serie = [...listaEjercicios.querySelectorAll("li[data-serie-id]")].find((li) => li.dataset.serieId === serieId);
+  // Si la serie no se encuentra (datos viejos sin id), se muestra al menos el ejercicio
+  const destino = serie || [...listaEjercicios.querySelectorAll(".btn-toggle-icono")]
+    .find((btn) => btn.dataset.ejercicioId === ejercicioId)?.closest(".ejercicio-card");
+  if (!destino) return;
+  const sinMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  destino.scrollIntoView({ block: "center", behavior: sinMovimiento ? "auto" : "smooth" });
+  if (!serie) return;
+  serie.classList.add("serie-pr-destacada");
+  serie.addEventListener("animationend", () => serie.classList.remove("serie-pr-destacada"), { once: true });
+}
+
 document.getElementById("form-ejercicio").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = document.getElementById("nombre-ejercicio");
@@ -648,11 +666,9 @@ listaEjercicios.addEventListener("click", async (e) => {
         return;
       }
       const punto = mejorPuntoProgreso(entrada);
-      if (punto.entrenamientoId === entrenamientoActual.id) {
-        alert(`El récord personal de este ejercicio (${textoMarcaProgreso(punto)}) está en este mismo entrenamiento.`);
-        return;
-      }
-      await irADetalle(punto.entrenamientoId);
+      // Si el récord está en este mismo entrenamiento no se navega: solo se muestra la serie
+      if (punto.entrenamientoId !== entrenamientoActual.id) await irADetalle(punto.entrenamientoId);
+      mostrarSerieDestacada(punto.ejercicioId, punto.serieId);
     } finally {
       btnVerPR.disabled = false;
     }
@@ -1071,6 +1087,8 @@ function construirMapaProgreso(entrenamientosAsc) {
         reps: mejorSerie.reps,
         duracion: mejorSerie.duracion,
         entrenamientoId: entrenamiento.id,
+        ejercicioId: ejercicio.id,
+        serieId: mejorSerie.id,
       });
     }
   }

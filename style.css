@@ -485,6 +485,17 @@ button:active { transform: scale(0.98); }
 
 .lista-series li:last-child { border-bottom: none; }
 
+/* Serie del récord al llegar desde "Ver PR": fondo actual -> un poco más claro -> fondo actual.
+   El delay deja terminar el scroll suave antes de que empiece el destello. */
+@keyframes serie-pr-destello {
+  0%, 100% { background-color: transparent; box-shadow: 0 0 0 4px transparent; }
+  50% { background-color: #3f4b40; box-shadow: 0 0 0 4px #3f4b40; }
+}
+
+.lista-series li.serie-pr-destacada {
+  animation: serie-pr-destello 1.6s ease-in-out 0.4s 1;
+}
+
 .serie-detalle { flex: 1; }
 
 .serie-vacia { color: var(--text-dim); font-size: 0.82rem; padding: 6px 2px; }
