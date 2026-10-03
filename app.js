@@ -960,11 +960,40 @@ const selectEjercicioProgreso = document.getElementById("select-ejercicio-progre
 const contenedorProgreso = document.getElementById("contenedor-progreso");
 const vacioProgreso = document.getElementById("vacio-progreso");
 
+// Compara dos marcas (series o puntos con peso/reps/duracion): primero peso, luego reps y luego
+// duración. Un valor no cargado cuenta como el más bajo. Devuelve >0 si a es mejor que b.
+function compararMarcasProgreso(a, b) {
+  for (const campo of ["peso", "reps", "duracion"]) {
+    const va = a[campo] === null || a[campo] === undefined || isNaN(a[campo]) ? -Infinity : a[campo];
+    const vb = b[campo] === null || b[campo] === undefined || isNaN(b[campo]) ? -Infinity : b[campo];
+    if (va !== vb) return va > vb ? 1 : -1;
+  }
+  return 0;
+}
+
+// Mejor sesión de un ejercicio. En un empate exacto gana la primera que alcanzó la marca.
+function mejorPuntoProgreso(entrada) {
+  return entrada.puntos.reduce((mejor, p) => (compararMarcasProgreso(p, mejor) > 0 ? p : mejor));
+}
+
+// Texto de la marca de una sesión, ej: "10 kg × 12 reps · 15 s" (solo lo que se cargó)
+function textoMarcaProgreso(p) {
+  const tiene = (v) => v !== null && v !== undefined && !isNaN(v);
+  const partes = [];
+  if (tiene(p.peso) && tiene(p.reps)) partes.push(`${p.peso} kg × ${p.reps} reps`);
+  else if (tiene(p.peso)) partes.push(`${p.peso} kg`);
+  else if (tiene(p.reps)) partes.push(`${p.reps} reps`);
+  if (tiene(p.duracion)) partes.push(`${p.duracion} s`);
+  return partes.join(" · ");
+}
+
 // Agrupa la serie "representativa" de cada sesión por ejercicio, usando el nombre
 // normalizado como clave para juntar variantes de mayúsculas/tildes/espacios.
 // Cada ejercicio se trackea por UNA sola métrica, elegida en este orden de prioridad:
 // peso (si alguna vez lo cargó) > reps (si nunca tuvo peso) > duración (si no tiene ninguno de los dos).
 // Así, ejercicios de peso corporal (Dominadas) o isométricos (Plancha) también aparecen.
+// Dentro de una misma sesión, y entre sesiones, las marcas iguales en esa métrica se desempatan
+// por reps y luego por duración (ver compararMarcasProgreso).
 function construirMapaProgreso(entrenamientosAsc) {
   const CAMPOS = ["peso", "reps", "duracion"];
   const UNIDADES = { peso: "kg", reps: "reps", duracion: "s" };
@@ -1001,15 +1030,23 @@ function construirMapaProgreso(entrenamientosAsc) {
       const metrica = metricaDe(clave);
       if (!metrica) continue; // este ejercicio nunca tuvo peso, reps ni duración cargados
 
-      const valores = ejercicio.series.map((s) => s[metrica]).filter(tieneValor);
-      if (!valores.length) continue; // esta sesión puntual no cargó esa métrica en particular
+      const candidatas = ejercicio.series.filter((s) => tieneValor(s[metrica]));
+      if (!candidatas.length) continue; // esta sesión puntual no cargó esa métrica en particular
 
-      const valorMax = Math.max(...valores);
+      // Serie representativa de la sesión: la mejor según peso > reps > duración
+      const mejorSerie = candidatas.reduce((mejor, s) => (compararMarcasProgreso(s, mejor) > 0 ? s : mejor));
 
       if (!mapa.has(clave)) mapa.set(clave, { nombre: ejercicio.nombre, metrica, unidad: UNIDADES[metrica], puntos: [] });
       const entrada = mapa.get(clave);
       entrada.nombre = ejercicio.nombre;
-      entrada.puntos.push({ fecha: entrenamiento.fecha, valor: valorMax, entrenamientoId: entrenamiento.id });
+      entrada.puntos.push({
+        fecha: entrenamiento.fecha,
+        valor: mejorSerie[metrica],
+        peso: mejorSerie.peso,
+        reps: mejorSerie.reps,
+        duracion: mejorSerie.duracion,
+        entrenamientoId: entrenamiento.id,
+      });
     }
   }
 
@@ -1104,12 +1141,11 @@ function renderRecords(mapaProgreso) {
   }
 
   contenedor.innerHTML = entradas.map(([, entrada]) => {
-    const mejorMarca = Math.max(...entrada.puntos.map((p) => p.valor));
-    const punto = entrada.puntos.find((p) => p.valor === mejorMarca);
+    const punto = mejorPuntoProgreso(entrada);
     return `
       <li class="record-item" data-entrenamiento-id="${punto.entrenamientoId}" tabindex="0" role="button">
         <span>${escapeHtml(entrada.nombre)}</span>
-        <span><span class="record-peso">${mejorMarca} ${entrada.unidad}</span> · ${formatearFechaISO(punto.fecha)}</span>
+        <span><span class="record-peso">${textoMarcaProgreso(punto)}</span> · ${formatearFechaISO(punto.fecha)}</span>
       </li>
     `;
   }).join("");
@@ -1167,7 +1203,7 @@ function generarSvgProgreso(puntos, nombreEjercicio, unidad) {
 
   const circulos = puntos.map((p, i) => `
     <circle class="progreso-punto" cx="${x(i)}" cy="${y(p.valor)}" r="4">
-      <title>${formatearFechaISO(p.fecha)} · ${p.valor} ${unidad}</title>
+      <title>${formatearFechaISO(p.fecha)} · ${textoMarcaProgreso(p)}</title>
     </circle>
   `).join("");
 
@@ -1189,8 +1225,7 @@ function generarSvgProgreso(puntos, nombreEjercicio, unidad) {
 
 function renderGraficoProgreso(entrada) {
   const puntos = entrada.puntos;
-  const mejorMarca = Math.max(...puntos.map((p) => p.valor));
-  const puntoMejor = puntos.find((p) => p.valor === mejorMarca);
+  const puntoMejor = mejorPuntoProgreso(entrada);
 
   if (puntos.length < 2) {
     contenedorProgreso.innerHTML = `
@@ -1203,7 +1238,7 @@ function renderGraficoProgreso(entrada) {
   contenedorProgreso.innerHTML = `
     ${generarSvgProgreso(puntos, entrada.nombre, entrada.unidad)}
     <div class="progreso-resumen">
-      <div><strong>${mejorMarca} ${entrada.unidad}</strong><span>mejor marca (${formatearFechaISO(puntoMejor.fecha)})</span></div>
+      <div><strong>${textoMarcaProgreso(puntoMejor)}</strong><span>mejor marca (${formatearFechaISO(puntoMejor.fecha)})</span></div>
       <div><strong>${puntos.length}</strong><span>sesiones registradas</span></div>
     </div>
     <button class="link-ir-entrenamiento" data-entrenamiento-id="${puntoMejor.entrenamientoId}">Ver ese entrenamiento ›</button>
