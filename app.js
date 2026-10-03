@@ -182,7 +182,8 @@ async function obtenerPlantillas() {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PLANTILLAS, "readonly");
     const req = tx.objectStore(STORE_PLANTILLAS).getAll();
-    req.onsuccess = () => resolve(req.result.sort((a, b) => a.id - b.id).map(normalizarPlantilla));
+    // "orden" es opcional (se asigna al reordenar); sin él se usa el id
+    req.onsuccess = () => resolve(req.result.sort((a, b) => (a.orden ?? a.id) - (b.orden ?? b.id) || a.id - b.id).map(normalizarPlantilla));
     req.onerror = () => reject(req.error);
   });
 }
@@ -716,6 +717,7 @@ const nombreNuevaPlantilla = document.getElementById("nombre-nueva-plantilla");
 function templatePlantilla(pl) {
   const colapsado = colapsadosPlantillas.has(pl.id);
   const totalEjercicios = pl.ejercicios.length;
+  const posPlantilla = plantillasCache.findIndex((p) => p.id === pl.id);
 
   return `
     <section class="card plantilla-card" data-plantilla-id="${pl.id}">
@@ -725,6 +727,10 @@ function templatePlantilla(pl) {
         </button>
         <input type="text" class="input-nombre-plantilla" value="${escapeHtml(pl.nombre)}" data-plantilla-id="${pl.id}" aria-label="Nombre de la plantilla">
         ${colapsado ? `<span class="ejercicio-resumen">${totalEjercicios} ejercicio${totalEjercicios !== 1 ? "s" : ""}</span>` : ""}
+        <div class="btn-orden-grupo">
+          <button class="btn-orden btn-subir-plantilla" data-plantilla-id="${pl.id}" title="Subir" aria-label="Subir plantilla" ${posPlantilla <= 0 ? "disabled" : ""}>▲</button>
+          <button class="btn-orden btn-bajar-plantilla" data-plantilla-id="${pl.id}" title="Bajar" aria-label="Bajar plantilla" ${posPlantilla === plantillasCache.length - 1 ? "disabled" : ""}>▼</button>
+        </div>
         <button class="btn-x btn-borrar-plantilla" data-plantilla-id="${pl.id}" title="Borrar plantilla" aria-label="Borrar plantilla">✕</button>
       </div>
 
@@ -832,6 +838,27 @@ listaPlantillas.addEventListener("click", async (e) => {
     else colapsadosPlantillas.add(id);
     const plantilla = plantillasCache.find((p) => p.id === id);
     if (plantilla) reRenderPlantillaCard(plantilla);
+    return;
+  }
+
+  const btnSubirPl = e.target.closest(".btn-subir-plantilla");
+  const btnBajarPl = e.target.closest(".btn-bajar-plantilla");
+  if (btnSubirPl || btnBajarPl) {
+    const id = Number((btnSubirPl || btnBajarPl).dataset.plantillaId);
+    const index = plantillasCache.findIndex((p) => p.id === id);
+    const destino = btnSubirPl ? index - 1 : index + 1;
+    if (index < 0 || destino < 0 || destino >= plantillasCache.length) return;
+    [plantillasCache[index], plantillasCache[destino]] = [plantillasCache[destino], plantillasCache[index]];
+    // Persistir el orden: cada plantilla guarda su posición; solo se escriben las que cambian
+    const modificadas = [];
+    plantillasCache.forEach((p, i) => {
+      if (p.orden !== i) {
+        p.orden = i;
+        modificadas.push(p);
+      }
+    });
+    await Promise.all(modificadas.map(guardarPlantilla));
+    listaPlantillas.innerHTML = plantillasCache.map(templatePlantilla).join("");
     return;
   }
 
