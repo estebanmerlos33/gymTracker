@@ -440,6 +440,25 @@ button:active { transform: scale(0.98); }
   white-space: nowrap;
 }
 
+/* "Ver PR": ocupa el lugar del contador de series cuando el ejercicio está desplegado */
+.btn-ver-pr {
+  flex: none;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--dificil);
+  background: transparent;
+  border: 1px solid var(--dificil);
+  border: 1px solid color-mix(in srgb, var(--dificil) 55%, transparent);
+  border-radius: 8px;
+}
+
+.btn-ver-pr:active { transform: scale(0.96); }
+.btn-ver-pr:disabled { opacity: 0.5; cursor: default; }
+
 .ejercicio-contenido {
   display: flex;
   flex-direction: column;

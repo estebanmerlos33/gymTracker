@@ -531,7 +531,9 @@ function templateEjercicio(ej, index, total) {
           <span class="toggle-icono">${colapsado ? "▸" : "▾"}</span>
         </button>
         <input type="text" class="input-nombre-ejercicio" value="${escapeHtml(ej.nombre)}" data-ejercicio-id="${ej.id}" aria-label="Nombre del ejercicio">
-        ${colapsado ? `<span class="ejercicio-resumen">${totalSeries} serie${totalSeries !== 1 ? "s" : ""}</span>` : ""}
+        ${colapsado
+          ? `<span class="ejercicio-resumen">${totalSeries} serie${totalSeries !== 1 ? "s" : ""}</span>`
+          : `<button type="button" class="btn-ver-pr" data-ejercicio-id="${ej.id}" title="Ver el récord personal de este ejercicio" aria-label="Ver récord personal">Ver PR</button>`}
         <div class="btn-orden-grupo">
           <button class="btn-orden btn-subir-ejercicio" data-ejercicio-id="${ej.id}" title="Subir" aria-label="Subir ejercicio" ${index === 0 ? "disabled" : ""}>▲</button>
           <button class="btn-orden btn-bajar-ejercicio" data-ejercicio-id="${ej.id}" title="Bajar" aria-label="Bajar ejercicio" ${index === total - 1 ? "disabled" : ""}>▼</button>
@@ -631,6 +633,29 @@ listaEjercicios.addEventListener("click", async (e) => {
     if (colapsados.has(id)) colapsados.delete(id);
     else colapsados.add(id);
     renderEjercicios();
+    return;
+  }
+
+  const btnVerPR = e.target.closest(".btn-ver-pr");
+  if (btnVerPR) {
+    const ejercicio = entrenamientoActual.ejercicios.find((ej) => ej.id === btnVerPR.dataset.ejercicioId);
+    if (!ejercicio) return;
+    btnVerPR.disabled = true; // evita doble toque mientras se consulta el historial
+    try {
+      const entrada = (await obtenerDatosProgreso()).get(normalizarNombre(ejercicio.nombre));
+      if (!entrada) {
+        alert("Este ejercicio todavía no tiene series registradas, así que no hay récord personal.");
+        return;
+      }
+      const punto = mejorPuntoProgreso(entrada);
+      if (punto.entrenamientoId === entrenamientoActual.id) {
+        alert(`El récord personal de este ejercicio (${textoMarcaProgreso(punto)}) está en este mismo entrenamiento.`);
+        return;
+      }
+      await irADetalle(punto.entrenamientoId);
+    } finally {
+      btnVerPR.disabled = false;
+    }
     return;
   }
 
