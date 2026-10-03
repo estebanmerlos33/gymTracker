@@ -143,9 +143,9 @@ button {
 button:active { transform: scale(0.98); }
 
 .actions-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
   margin-bottom: 14px;
 }
 
@@ -184,6 +184,47 @@ button:active { transform: scale(0.98); }
   cursor: pointer;
   flex: none;
 }
+
+/* Botones de acciones de la lista (Plantillas / Progreso / Importar / Exportar) */
+.btn-accion {
+  --tono: var(--accent);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--tono);
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--tono) 12%, transparent);
+  border: 1px solid var(--tono);
+  border: 1px solid color-mix(in srgb, var(--tono) 45%, transparent);
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-accion svg { width: 17px; height: 17px; flex: none; }
+
+.btn-accion span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-accion:active { transform: scale(0.98); }
+.btn-accion:focus-visible { outline: 2px solid var(--tono); outline-offset: 2px; }
+
+.accion-plantillas { --tono: #6bb8e0; }
+.accion-progreso { --tono: var(--accent); }
+.accion-importar { --tono: #e0b96b; }
+.accion-exportar { --tono: #b79be0; }
 
 /* ---------- Botón "+ Nuevo entrenamiento" y su form ---------- */
 
@@ -729,16 +770,28 @@ button:active { transform: scale(0.98); }
 }
 
 .link-peligro {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-size: 0.78rem;
-  text-decoration: underline;
-  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 11px 12px;
+  border-radius: 10px;
   cursor: pointer;
 }
 
-.link-peligro:active { color: var(--danger); }
+.link-peligro svg { width: 17px; height: 17px; flex: none; }
+.link-peligro span { min-width: 0; text-align: center; }
+.link-peligro:active { transform: scale(0.98); background: color-mix(in srgb, var(--danger) 22%, transparent); }
+.link-peligro:focus-visible { outline: 2px solid var(--danger); outline-offset: 2px; }
 
 .panel-peligro {
   width: 100%;
