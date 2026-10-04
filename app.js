@@ -496,6 +496,31 @@ const detalleDiaSemana = document.getElementById("detalle-dia-semana");
 const tipoEntrenamiento = document.getElementById("tipo-entrenamiento");
 const listaEjercicios = document.getElementById("lista-ejercicios");
 
+// Animación breve al desplegar/colapsar un bloque (alto + opacidad). Como el estado se aplica
+// re-renderizando, se usa la Web Animations API: al desplegar se anima el bloque ya renderizado y al
+// colapsar se anima antes de cambiar el estado. El bloque debe estar visible al llamarla. Resuelve al
+// terminar; si el usuario pidió menos movimiento, no anima.
+function animarContenido(bloque, desplegar) {
+  if (!bloque || !bloque.animate || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
+  const alto = bloque.getBoundingClientRect().height;
+  const hueco = parseFloat(getComputedStyle(bloque.parentElement).rowGap) || 0; // el gap de la tarjeta también se anima
+  const abierto = { height: `${alto}px`, marginTop: "0px", opacity: 1 };
+  const cerrado = { height: "0px", marginTop: `${-hueco}px`, opacity: 0 };
+  bloque.style.overflow = "hidden";
+  const animacion = bloque.animate(desplegar ? [cerrado, abierto] : [abierto, cerrado], {
+    duration: desplegar ? 200 : 160,
+    easing: desplegar ? "ease-out" : "ease-in",
+    fill: desplegar ? "none" : "forwards", // al colapsar se mantiene cerrado hasta que se re-renderiza
+  });
+  const limpiar = () => { if (desplegar) bloque.style.overflow = ""; };
+  return animacion.finished.then(limpiar, limpiar); // si se cancela (p. ej. re-render) tampoco falla
+}
+
+function contenidoDeEjercicio(ejercicioId) {
+  const card = [...listaEjercicios.querySelectorAll(".ejercicio-card")].find((c) => c.dataset.ejercicioId === ejercicioId);
+  return card && card.querySelector(".ejercicio-contenido");
+}
+
 function templateSerie(ejercicioId, serie) {
   const partes = [];
   if (serie.peso != null && serie.reps != null) {
@@ -589,22 +614,94 @@ async function persistirYRenderizar() {
   await renderDetalle();
 }
 
-// Despliega el ejercicio, lleva la vista a la serie indicada y la resalta unos instantes (animación en CSS)
-function mostrarSerieDestacada(ejercicioId, serieId) {
-  if (colapsados.has(ejercicioId)) {
+let scrollPRId = 0; // identifica la animación de scroll vigente: una nueva cancela a la anterior
+const PAUSA_LLEGADA_MS = 450; // mínimo entre la llegada a otro entrenamiento y el despliegue del ejercicio
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
+// Scroll animado propio (scrollIntoView no permite elegir la duración): lleva el elemento al centro
+// de la pantalla. Resuelve "completo", "interrumpido" (el usuario tocó o giró la rueda y toma el
+// control) o "abandonado" (hubo otra animación, se cambió de vista o se re-renderizó). "corto" es
+// para un ajuste breve después de otro scroll.
+function scrollSuaveA(elemento, id, corto = false) {
+  const caja = elemento.getBoundingClientRect();
+  const maxY = document.documentElement.scrollHeight - window.innerHeight;
+  const destinoY = Math.max(0, Math.min(maxY, window.scrollY + caja.top - (window.innerHeight - caja.height) / 2));
+  const inicio = window.scrollY;
+  const delta = destinoY - inicio;
+  if (Math.abs(delta) < 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    window.scrollTo(0, destinoY);
+    return Promise.resolve("completo");
+  }
+  const [base, minimo] = corto ? [250, 350] : [500, 700];
+  const duracion = Math.min(1200, Math.max(minimo, base + Math.abs(delta) * 0.35)); // ms
+  return new Promise((resolve) => {
+    let interrumpido = false;
+    const cortar = () => { interrumpido = true; };
+    const eventos = ["wheel", "touchstart"];
+    const terminar = (estado) => {
+      eventos.forEach((ev) => window.removeEventListener(ev, cortar));
+      resolve(estado);
+    };
+    eventos.forEach((ev) => window.addEventListener(ev, cortar, { passive: true }));
+    const t0 = performance.now();
+    const paso = (ahora) => {
+      if (id !== scrollPRId || !elemento.isConnected || viewDetalle.classList.contains("hidden")) return terminar("abandonado");
+      if (interrumpido) return terminar("interrumpido");
+      const p = Math.min(1, (ahora - t0) / duracion);
+      const suave = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // ease-in-out
+      window.scrollTo(0, inicio + delta * suave);
+      if (p < 1) requestAnimationFrame(paso);
+      else terminar("completo");
+    };
+    requestAnimationFrame(paso);
+  });
+}
+
+// Lleva la vista a la serie indicada y, cuando todo terminó, la resalta unos instantes (animación en
+// CSS). Secuencia: si el ejercicio está colapsado, 1) scroll hasta él, 2) despliegue animado ya a la
+// vista y 3) un ajuste corto de scroll solo si la serie no quedó visible; si ya estaba desplegado, un
+// único scroll hasta la serie. Cada paso espera a que termine el anterior. Si se llegó desde otro
+// entrenamiento (navego), se parte siempre desde su inicio —el navegador conserva el scroll de la
+// pantalla anterior y, si ese entrenamiento es más corto, lo recorta al fondo y el scroll no se vería—
+// y se deja un instante para registrar el cambio de pantalla antes de desplegar.
+async function mostrarSerieDestacada(ejercicioId, serieId, navego = false) {
+  const id = ++scrollPRId; // una llamada nueva cancela a la anterior, incluso en pleno despliegue
+  const llegada = performance.now();
+  if (navego) window.scrollTo(0, 0);
+  const buscarCard = () => [...listaEjercicios.querySelectorAll(".ejercicio-card")].find((c) => c.dataset.ejercicioId === ejercicioId);
+  const estabaColapsado = colapsados.has(ejercicioId);
+  let estado = "completo";
+  if (estabaColapsado) {
+    const colapsada = buscarCard();
+    if (!colapsada) return;
+    estado = await scrollSuaveA(colapsada, id);
+    if (estado === "abandonado") return;
+    if (navego && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await esperar(PAUSA_LLEGADA_MS - (performance.now() - llegada));
+      if (id !== scrollPRId || viewDetalle.classList.contains("hidden")) return;
+    }
     colapsados.delete(ejercicioId);
     renderEjercicios();
+    await animarContenido(contenidoDeEjercicio(ejercicioId), true);
+    if (id !== scrollPRId || viewDetalle.classList.contains("hidden")) return;
   }
   const serie = [...listaEjercicios.querySelectorAll("li[data-serie-id]")].find((li) => li.dataset.serieId === serieId);
-  // Si la serie no se encuentra (datos viejos sin id), se muestra al menos el ejercicio
-  const destino = serie || [...listaEjercicios.querySelectorAll(".btn-toggle-icono")]
-    .find((btn) => btn.dataset.ejercicioId === ejercicioId)?.closest(".ejercicio-card");
-  if (!destino) return;
-  const sinMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  destino.scrollIntoView({ block: "center", behavior: sinMovimiento ? "auto" : "smooth" });
-  if (!serie) return;
+  if (!serie) {
+    // Datos viejos sin id de serie: se muestra al menos el ejercicio
+    const card = buscarCard();
+    if (card && !estabaColapsado) await scrollSuaveA(card, id);
+    return;
+  }
+  if (estado === "completo") {
+    const caja = serie.getBoundingClientRect();
+    const visible = caja.top >= 80 && caja.bottom <= window.innerHeight - 20; // 80px: barra superior fija
+    if (!(estabaColapsado && visible)) estado = await scrollSuaveA(serie, id, estabaColapsado);
+  }
+  if (estado === "abandonado") return;
+  const quitarDestello = () => serie.classList.remove("serie-pr-destacada");
   serie.classList.add("serie-pr-destacada");
-  serie.addEventListener("animationend", () => serie.classList.remove("serie-pr-destacada"), { once: true });
+  serie.addEventListener("animationend", quitarDestello, { once: true });
+  serie.addEventListener("animationcancel", quitarDestello, { once: true }); // p. ej. si se sale de la vista en pleno destello
 }
 
 document.getElementById("form-ejercicio").addEventListener("submit", async (e) => {
@@ -648,9 +745,17 @@ listaEjercicios.addEventListener("click", async (e) => {
   const btnToggle = e.target.closest(".btn-toggle-icono");
   if (btnToggle) {
     const id = btnToggle.dataset.ejercicioId;
-    if (colapsados.has(id)) colapsados.delete(id);
-    else colapsados.add(id);
-    renderEjercicios();
+    const contenido = btnToggle.closest(".ejercicio-card").querySelector(".ejercicio-contenido");
+    if (contenido.getAnimations?.().length) return; // todavía animando: se ignora el toque
+    if (colapsados.has(id)) {
+      colapsados.delete(id);
+      renderEjercicios();
+      animarContenido(contenidoDeEjercicio(id), true);
+    } else {
+      await animarContenido(contenido, false);
+      colapsados.add(id);
+      renderEjercicios();
+    }
     return;
   }
 
@@ -667,8 +772,9 @@ listaEjercicios.addEventListener("click", async (e) => {
       }
       const punto = mejorPuntoProgreso(entrada);
       // Si el récord está en este mismo entrenamiento no se navega: solo se muestra la serie
-      if (punto.entrenamientoId !== entrenamientoActual.id) await irADetalle(punto.entrenamientoId);
-      mostrarSerieDestacada(punto.ejercicioId, punto.serieId);
+      const navego = punto.entrenamientoId !== entrenamientoActual.id;
+      if (navego) await irADetalle(punto.entrenamientoId);
+      mostrarSerieDestacada(punto.ejercicioId, punto.serieId, navego);
     } finally {
       btnVerPR.disabled = false;
     }
@@ -910,10 +1016,18 @@ listaPlantillas.addEventListener("click", async (e) => {
   const btnToggle = e.target.closest(".btn-toggle-icono");
   if (btnToggle) {
     const id = Number(btnToggle.dataset.plantillaId);
-    if (colapsadosPlantillas.has(id)) colapsadosPlantillas.delete(id);
-    else colapsadosPlantillas.add(id);
     const plantilla = plantillasCache.find((p) => p.id === id);
-    if (plantilla) reRenderPlantillaCard(plantilla);
+    const contenido = btnToggle.closest(".plantilla-card").querySelector(".ejercicio-contenido");
+    if (contenido.getAnimations?.().length) return; // todavía animando: se ignora el toque
+    if (colapsadosPlantillas.has(id)) {
+      colapsadosPlantillas.delete(id);
+      if (plantilla) reRenderPlantillaCard(plantilla);
+      animarContenido(listaPlantillas.querySelector(`.plantilla-card[data-plantilla-id="${id}"] .ejercicio-contenido`), true);
+    } else {
+      await animarContenido(contenido, false);
+      colapsadosPlantillas.add(id);
+      if (plantilla) reRenderPlantillaCard(plantilla);
+    }
     return;
   }
 
@@ -1186,7 +1300,7 @@ function renderRecords(mapaProgreso) {
   contenedor.innerHTML = entradas.map(([, entrada]) => {
     const punto = mejorPuntoProgreso(entrada);
     return `
-      <li class="record-item" data-entrenamiento-id="${punto.entrenamientoId}" tabindex="0" role="button">
+      <li class="record-item" data-entrenamiento-id="${punto.entrenamientoId}" data-ejercicio-id="${punto.ejercicioId ?? ""}" data-serie-id="${punto.serieId ?? ""}" tabindex="0" role="button">
         <span>${escapeHtml(entrada.nombre)}</span>
         <span><span class="record-peso">${textoMarcaProgreso(punto)}</span> · ${formatearFechaISO(punto.fecha)}</span>
       </li>
@@ -1194,20 +1308,26 @@ function renderRecords(mapaProgreso) {
   }).join("");
 }
 
+// Navega al entrenamiento del récord y muestra la serie (igual que el botón "Ver PR" del detalle)
+async function irAlRecord({ entrenamientoId, ejercicioId, serieId }) {
+  await irADetalle(Number(entrenamientoId));
+  mostrarSerieDestacada(ejercicioId, serieId, true);
+}
+
 document.getElementById("records-contenido").addEventListener("click", (e) => {
   const li = e.target.closest(".record-item");
-  if (li) irADetalle(Number(li.dataset.entrenamientoId));
+  if (li) irAlRecord(li.dataset);
 });
 
 document.getElementById("records-contenido").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   const li = e.target.closest(".record-item");
-  if (li) irADetalle(Number(li.dataset.entrenamientoId));
+  if (li) irAlRecord(li.dataset);
 });
 
 document.getElementById("contenedor-progreso").addEventListener("click", (e) => {
   const btn = e.target.closest(".link-ir-entrenamiento");
-  if (btn) irADetalle(Number(btn.dataset.entrenamientoId));
+  if (btn) irAlRecord(btn.dataset);
 });
 
 function generarSvgProgreso(puntos, nombreEjercicio, unidad) {
@@ -1284,7 +1404,7 @@ function renderGraficoProgreso(entrada) {
       <div><strong>${textoMarcaProgreso(puntoMejor)}</strong><span>mejor marca (${formatearFechaISO(puntoMejor.fecha)})</span></div>
       <div><strong>${puntos.length}</strong><span>sesiones registradas</span></div>
     </div>
-    <button class="link-ir-entrenamiento" data-entrenamiento-id="${puntoMejor.entrenamientoId}">Ver ese entrenamiento ›</button>
+    <button class="link-ir-entrenamiento" data-entrenamiento-id="${puntoMejor.entrenamientoId}" data-ejercicio-id="${puntoMejor.ejercicioId ?? ""}" data-serie-id="${puntoMejor.serieId ?? ""}">Ver ese entrenamiento ›</button>
   `;
 }
 
